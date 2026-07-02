@@ -317,7 +317,7 @@
               <span>Loại tài khoản (*)</span>
               <select name="loai_tai_khoan" required>
                 @foreach ($accountTypes as $value => $label)
-                  <option value="{{ $value }}">{{ $label }}</option>
+                  <option value="{{ $value }}" @selected($value === 'customer')>{{ $label }}</option>
                 @endforeach
               </select>
             </label>

@@ -61,6 +61,7 @@
                   'ten_vai_tro' => $role->ten_vai_tro,
                   'mo_ta' => $role->mo_ta,
                   'trang_thai' => $role->trang_thai,
+                  'mac_dinh' => (bool) $role->mac_dinh,
                   'quyen' => $permissionIds,
                   'urls' => [
                     'permissions' => route('admin.roles.permissions', $role),
@@ -82,7 +83,12 @@
                   </div>
                 </td>
                 <td class="account-username">{{ $role->ma_vai_tro }}</td>
-                <td>{{ $role->ten_vai_tro }}</td>
+                <td>
+                  {{ $role->ten_vai_tro }}
+                  @if ($role->mac_dinh)
+                    <span class="account-status-pill is-yes">Mặc định</span>
+                  @endif
+                </td>
                 <td>
                   <span class="account-role">
                     {{ $permissionNames->isNotEmpty() ? $permissionNames->take(3)->join(', ') : 'Chưa có quyền' }}
@@ -158,6 +164,10 @@
             <label>
               <span>Mô tả</span>
               <input type="text" data-role-description readonly>
+            </label>
+            <label class="account-check">
+              <input type="checkbox" name="mac_dinh" value="1" data-role-default>
+              <span>Mặc định — dùng làm vai trò gán tự động cho tài khoản mới chưa chọn vai trò.</span>
             </label>
           </div>
         </div>

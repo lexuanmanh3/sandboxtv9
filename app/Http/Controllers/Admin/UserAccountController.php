@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\UsersExport;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\StoreUserAccountRequest;
-use App\Http\Requests\Admin\UpdateUserAccountRequest;
-use App\Http\Requests\Admin\UpdateUserPasswordRequest;
+use App\Http\Requests\Admin\Accounts\StoreUserAccountRequest;
+use App\Http\Requests\Admin\Accounts\UpdateUserAccountRequest;
+use App\Http\Requests\Admin\Accounts\UpdateUserPasswordRequest;
 use App\Models\User;
 use App\Models\VaiTro;
 use Illuminate\Database\Eloquent\Builder;
@@ -263,10 +263,15 @@ class UserAccountController extends Controller
 
     /**
      * Sync vai tro bang pivot nguoi_dung_vai_tro da co san.
-     * Neu form khong gui vai_tro thi bo het vai tro hien tai cua user.
+     * Neu form khong chon vai tro nao, gan vai tro mac dinh (mac_dinh=true trong bang vai_tro)
+     * de tranh tao ra tai khoan khong co vai tro nao.
      */
     private function syncRoles(User $user, array $roleIds): void
     {
+        if (empty($roleIds)) {
+            $roleIds = [VaiTro::vaiTroMacDinh()->id];
+        }
+
         $user->vaiTro()->sync($roleIds);
     }
 

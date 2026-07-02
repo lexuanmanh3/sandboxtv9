@@ -21,7 +21,19 @@ class AuthController extends Controller
     public function showLoginForm()
     {
         if (Auth::check()) {
-            return redirect($this->duongDanSauDangNhap(Auth::user()));
+            $duongDan = $this->duongDanSauDangNhap(Auth::user());
+
+            // Phiên đăng nhập hiện tại không còn quyền nào (ví dụ vai trò vừa bị gỡ quyền):
+            // đăng xuất để không kẹt ở trạng thái "đã login nhưng không vào đâu được".
+            if ($duongDan === null) {
+                Auth::logout();
+                request()->session()->invalidate();
+                request()->session()->regenerateToken();
+
+                return view('auth.login');
+            }
+
+            return redirect($duongDan);
         }
 
         return view('auth.login');
@@ -80,8 +92,23 @@ class AuthController extends Controller
         // Tạo lại session ID để tránh session fixation attack
         $request->session()->regenerate();
 
+        $duongDan = $this->duongDanSauDangNhap($user);
+
+        // Tài khoản chưa được cấp bất kỳ quyền truy cập nào (chưa gán vai trò
+        // hoặc vai trò chưa có quyền .access nào): không đăng nhập được, báo lỗi rõ ràng
+        // thay vì âm thầm đăng xuất.
+        if ($duongDan === null) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()
+                ->withInput($request->only('ten_dang_nhap'))
+                ->withErrors(['ten_dang_nhap' => 'Tài khoản của bạn chưa được cấp quyền truy cập. Vui lòng liên hệ quản trị viên.']);
+        }
+
         // Chuyển về trang người dùng muốn vào trước đó, hoặc về trang chủ
-        return redirect($this->duongDanSauDangNhap($user));
+        return redirect($duongDan);
     }
 
     // -------------------------------------------------------------------------
@@ -94,7 +121,17 @@ class AuthController extends Controller
     public function showRegisterForm()
     {
         if (Auth::check()) {
-            return redirect($this->duongDanSauDangNhap(Auth::user()));
+            $duongDan = $this->duongDanSauDangNhap(Auth::user());
+
+            if ($duongDan === null) {
+                Auth::logout();
+                request()->session()->invalidate();
+                request()->session()->regenerateToken();
+
+                return view('auth.register');
+            }
+
+            return redirect($duongDan);
         }
 
         return view('auth.register');
@@ -157,15 +194,9 @@ class AuthController extends Controller
             'email_da_xac_nhan'     => false,
         ]);
 
-        // Tìm vai trò "user" trong bảng vai_tro, nếu chưa có thì tự tạo
-        $vaiTroNguoiDung = VaiTro::firstOrCreate(
-            ['ma_vai_tro' => 'user'],
-            [
-                'ten_vai_tro' => 'Người dùng',
-                'mac_dinh'    => false,
-                'trang_thai'  => 'hoat_dong',
-            ]
-        );
+        // Gán vai trò mặc định được cấu hình ở màn quản lý vai trò (mac_dinh=true).
+        // Không hard-code 'user' ở đây để admin có thể đổi vai trò mặc định qua UI.
+        $vaiTroNguoiDung = VaiTro::vaiTroMacDinh();
 
         // Gán vai trò qua bảng pivot nguoi_dung_vai_tro
         // syncWithoutDetaching: không xóa vai trò cũ nếu đã có
@@ -175,7 +206,20 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect($this->duongDanSauDangNhap($user))
+        $duongDan = $this->duongDanSauDangNhap($user);
+
+        // Trường hợp hiếm: vai trò "user" chưa được cấp quyền frontend nào (ví dụ bị admin
+        // gỡ quyền trong lúc đăng ký) — báo lỗi rõ ràng thay vì âm thầm đăng xuất.
+        if ($duongDan === null) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')
+                ->withErrors(['ten_dang_nhap' => 'Tài khoản của bạn chưa được cấp quyền truy cập. Vui lòng liên hệ quản trị viên.']);
+        }
+
+        return redirect($duongDan)
             ->with('dangky_thanh_cong', 'Chào mừng ' . $user->ten_hien_thi . '! Tài khoản đã được tạo thành công.');
     }
 
@@ -204,8 +248,12 @@ class AuthController extends Controller
     /**
      * Chọn trang đầu tiên sau đăng nhập theo quyền truy cập của vai trò.
      * Backend được ưu tiên vì tài khoản quản trị thường cần vào dashboard quản trị trước.
+     *
+     * Trả về null nếu user không có bất kỳ quyền .access nào (chưa gán vai trò,
+     * hoặc vai trò chưa có quyền) — nơi gọi chịu trách nhiệm đăng xuất và báo lỗi rõ ràng,
+     * hàm này chỉ tính toán đường dẫn nên không tự ý Auth::logout() ở đây.
      */
-    private function duongDanSauDangNhap(User $user): string
+    private function duongDanSauDangNhap(User $user): ?string
     {
         $adminRoutes = [
             'dashboard.access' => route('admin.dashboard'),
@@ -230,8 +278,6 @@ class AuthController extends Controller
             }
         }
 
-        Auth::logout();
-
-        return route('login');
+        return null;
     }
 }

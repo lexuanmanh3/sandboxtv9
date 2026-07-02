@@ -75,6 +75,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function setDefaultRoleCheckbox(checked) {
+    const field = document.querySelector("[data-role-default]");
+    if (field) {
+      field.checked = Boolean(checked);
+    }
+  }
+
   function getPermissionRows() {
     return [...document.querySelectorAll("[data-permission-item]")];
   }
@@ -181,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setReadonlyField("[data-role-name]", role.ten_vai_tro);
     setReadonlyField("[data-role-status]", role.trang_thai);
     setReadonlyField("[data-role-description]", role.mo_ta);
+    setDefaultRoleCheckbox(role.mac_dinh);
     clearPermissionChecks();
     setPermissionChecks(role.quyen);
   }

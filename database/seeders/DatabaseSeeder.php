@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
             VaiTroSeeder::class,
             QuyenSeeder::class,
             AdminSeeder::class,
+            // DichVuSeeder phải chạy trước DaiLyApiSeeder
+            // vì DaiLyApiSeeder cần có sẵn dich_vu để cấp quyền test
+            DichVuSeeder::class,
             DaiLyApiSeeder::class,
         ]);
         

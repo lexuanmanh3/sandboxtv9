@@ -46,6 +46,20 @@ class QuyenSeeder extends Seeder
                                 ],
                             ],
                             [
+                                'ma_quyen' => 'backend.catalog',
+                                'ten_quyen' => 'Quản lý danh mục',
+                                'nhom_quyen' => 'Quản lý danh mục',
+                                'thu_tu' => 15,
+                                'children' => [
+                                    [
+                                        'ma_quyen' => 'dich_vu.access',
+                                        'ten_quyen' => 'Dịch vụ',
+                                        'nhom_quyen' => 'Quản lý danh mục',
+                                        'thu_tu' => 10,
+                                    ],
+                                ],
+                            ],
+                            [
                                 'ma_quyen' => 'policy.access',
                                 'ten_quyen' => 'Quản lý chính sách',
                                 'nhom_quyen' => 'Quản lý chính sách',
@@ -182,6 +196,8 @@ class QuyenSeeder extends Seeder
             'backend.inventory',
             'dashboard.access',
             'inventory.access',
+            'backend.catalog',
+            'dich_vu.access',
             'backend.admin',
             'account.access',
             'role.access',

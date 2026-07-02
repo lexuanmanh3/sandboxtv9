@@ -188,6 +188,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function prepareCreateForm() {
     userForm?.reset();
     clearRoleChecks();
+    // NOTE: Ep loai_tai_khoan ve customer sau reset() de tranh truong hop trinh duyet
+    // giu lai lua chon truoc do hoac option dau tien trong select khac customer.
+    setField("loai_tai_khoan", "customer");
+    setField("trang_thai", "hoat_dong");
     if (userForm?.dataset.storeUrl) {
       userForm.action = userForm.dataset.storeUrl;
     }

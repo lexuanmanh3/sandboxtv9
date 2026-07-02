@@ -6,6 +6,7 @@ use App\Http\Controllers\Frontend\HomeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Admin\RoleAccessController;
 use App\Http\Controllers\Admin\UserAccountController;
+use App\Http\Controllers\Admin\ServiceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -60,6 +61,17 @@ Route::middleware(['auth', 'quyen:role.access'])->group(function () {
     Route::get('/admin/roles', [RoleAccessController::class, 'index'])->name('admin.roles');
     Route::get('/App/Roles', [RoleAccessController::class, 'index'])->name('app.roles');
     Route::put('/admin/roles/{role}/permissions', [RoleAccessController::class, 'updatePermissions'])->name('admin.roles.permissions');
+});
+
+// NOTE: Module Dich vu dung quyen dich_vu.access - quan ly danh muc dich vu lon
+// (TOPUP, PIN_CODE, PAY_BILL...), khac voi service_config.access (cau hinh NCC xu ly).
+Route::middleware(['auth', 'quyen:dich_vu.access'])->group(function () {
+    Route::get('/admin/services', [ServiceController::class, 'index'])->name('admin.services');
+    Route::get('/admin/services/export', [ServiceController::class, 'exportExcel'])->name('admin.services.export');
+    Route::get('/App/Services', [ServiceController::class, 'index'])->name('app.services');
+    Route::post('/admin/services', [ServiceController::class, 'store'])->name('admin.services.store');
+    Route::put('/admin/services/{service}', [ServiceController::class, 'update'])->name('admin.services.update');
+    Route::delete('/admin/services/{service}', [ServiceController::class, 'destroy'])->name('admin.services.destroy');
 });
 
 

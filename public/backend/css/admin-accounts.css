@@ -740,10 +740,15 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 20px;
+  padding: 20px;
 }
 
 .account-form-grid--single {
   grid-template-columns: 1fr;
+}
+
+.account-form-grid__full {
+  grid-column: 1 / -1;
 }
 
 .account-form-grid label,

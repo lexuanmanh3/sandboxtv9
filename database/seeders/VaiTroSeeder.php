@@ -18,7 +18,7 @@ class VaiTroSeeder extends Seeder
             [
                 'ma_vai_tro' => 'admin',
                 'ten_vai_tro' => 'Quản trị viên',
-                'mac_dinh' => true,
+                'mac_dinh' => false,
                 'trang_thai' => 'hoat_dong',
             ],
             [
@@ -53,10 +53,12 @@ class VaiTroSeeder extends Seeder
             ],
 
             // Vai trò dành cho người dùng đăng ký thông thường
+            // NOTE: mac_dinh=true — đây là vai trò được gán tự động cho tài khoản mới
+            // (customer tự đăng ký hoặc admin tạo user không chọn vai trò).
             [
                 'ma_vai_tro' => 'user',
                 'ten_vai_tro' => 'Người dùng',
-                'mac_dinh' => false,
+                'mac_dinh' => true,
                 'trang_thai' => 'hoat_dong',
             ],
         ];

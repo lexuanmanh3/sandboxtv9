@@ -50,6 +50,7 @@
         $canAccessAccounts = $currentUser?->coQuyen('account.access');
         $canAccessRoles = $currentUser?->coQuyen('role.access');
         $canAccessServiceConfig = $currentUser?->coQuyen('service_config.access');
+        $canAccessServices = $currentUser?->coQuyen('dich_vu.access');
         $canAccessAdminGroup = $currentUser?->coMotTrongCacQuyen(['account.access', 'role.access', 'service_config.access']);
         $adminHomeUrl = $canAccessDashboard
             ? route('admin.dashboard')
@@ -58,6 +59,7 @@
                 : ($canAccessRoles ? route('admin.roles') : '#'));
 
         $inventoryOpen = request()->routeIs('admin.dashboard');
+        $catalogOpen = request()->routeIs('admin.services', 'app.services');
         $adminOpen = request()->routeIs('admin.accounts', 'app.users', 'admin.roles', 'app.roles');
       @endphp
 
@@ -79,6 +81,20 @@
                 <a href="#">Chi tiết kho thẻ</a>
                 <a href="#">DS mã GD lấy thẻ từ kho</a>
               @endif
+            </div>
+          </div>
+        @endif
+
+        @if ($canAccessServices)
+          <div class="admin-nav__group {{ $catalogOpen ? 'is-open' : '' }}" data-nav-group>
+            <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $catalogOpen ? 'true' : 'false' }}">
+              <span><x-icon name="sync_alt" /> Quản lý danh mục</span>
+              <svg class="admin-nav__chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="M5 7.5 10 12.5 15 7.5" />
+              </svg>
+            </button>
+            <div class="admin-nav__submenu">
+              <a class="{{ request()->routeIs('admin.services', 'app.services') ? 'is-active' : '' }}" href="{{ route('admin.services') }}">Dịch vụ</a>
             </div>
           </div>
         @endif

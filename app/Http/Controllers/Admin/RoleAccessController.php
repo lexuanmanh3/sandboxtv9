@@ -8,6 +8,7 @@ use App\Models\VaiTro;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class RoleAccessController extends Controller
@@ -28,7 +29,7 @@ class RoleAccessController extends Controller
     }
 
     /**
-     * Cập nhật quyền truy cập trang/module cho một vai trò.
+     * Cập nhật quyền truy cập trang/module và cờ "vai trò mặc định" cho một vai trò.
      * Các quyền thao tác cũ không hiển thị ở cây này sẽ được giữ nguyên khi lưu.
      */
     public function updatePermissions(Request $request, VaiTro $role): RedirectResponse
@@ -36,6 +37,7 @@ class RoleAccessController extends Controller
         $validated = $request->validate([
             'quyen' => ['nullable', 'array'],
             'quyen.*' => ['integer', 'exists:quyen,id'],
+            'mac_dinh' => ['nullable', 'boolean'],
         ]);
 
         $managedPermissionIds = $this->managedAccessPermissions()->pluck('id');
@@ -44,13 +46,27 @@ class RoleAccessController extends Controller
             ->whereNotIn('quyen.id', $managedPermissionIds)
             ->pluck('quyen.id');
 
-        $role->quyen()->sync(
-            $keptPermissionIds
-                ->merge($validated['quyen'] ?? [])
-                ->unique()
-                ->values()
-                ->all()
-        );
+        DB::transaction(function () use ($role, $validated, $keptPermissionIds) {
+            $role->quyen()->sync(
+                $keptPermissionIds
+                    ->merge($validated['quyen'] ?? [])
+                    ->unique()
+                    ->values()
+                    ->all()
+            );
+
+            $macDinh = (bool) ($validated['mac_dinh'] ?? false);
+
+            if ($macDinh) {
+                // NOTE: Chỉ được đúng 1 vai trò mặc định tại một thời điểm — bỏ tick
+                // vai trò mặc định cũ trước khi gán cho vai trò đang sửa.
+                VaiTro::where('id', '!=', $role->id)
+                    ->where('mac_dinh', true)
+                    ->update(['mac_dinh' => false]);
+            }
+
+            $role->update(['mac_dinh' => $macDinh]);
+        });
 
         return back()->with('success', 'Cập nhật quyền truy cập cho vai trò thành công.');
     }

@@ -46,4 +46,32 @@ public function quyen()
         'quyen_id'
     );
 }
+
+    /**
+     * Vai trò mặc định dùng để gán cho tài khoản mới khi không chọn vai trò nào
+     * (customer tự đăng ký, hoặc admin tạo user không tick vai trò).
+     *
+     * Ưu tiên vai trò đang hoạt động được đánh dấu mac_dinh=true qua màn quản lý vai trò;
+     * nếu chưa vai trò nào được đánh dấu, fallback về ma_vai_tro='user' để hệ thống
+     * không bao giờ tạo ra tài khoản không có vai trò nào.
+     */
+    public static function vaiTroMacDinh(): self
+    {
+        $macDinh = static::where('mac_dinh', true)
+            ->where('trang_thai', 'hoat_dong')
+            ->first();
+
+        if ($macDinh) {
+            return $macDinh;
+        }
+
+        return static::firstOrCreate(
+            ['ma_vai_tro' => 'user'],
+            [
+                'ten_vai_tro' => 'Người dùng',
+                'mac_dinh' => true,
+                'trang_thai' => 'hoat_dong',
+            ]
+        );
+    }
 }
