@@ -1,7 +1,12 @@
-
 @extends('layout')
+
 @section('content')
- <main class="main-content container">
+  @php
+    $currentUser = auth()->user();
+    $canAccessFrontendTopup = $currentUser?->coQuyen('frontend.topup.access');
+  @endphp
+
+  <main class="main-content container">
     <section class="dashboard-card">
       <div class="quick-links">
         <a class="quick-link" href="#">
@@ -9,10 +14,12 @@
           <span>Thông tin tài khoản</span>
         </a>
 
-        <a class="quick-link" href="#">
-          <x-icon name="payments" />
-          <span>Nạp tiền tài khoản</span>
-        </a>
+        @if ($canAccessFrontendTopup)
+          <a class="quick-link" href="{{ route('frontend.topup') }}">
+            <x-icon name="payments" />
+            <span>Nạp tiền tài khoản</span>
+          </a>
+        @endif
 
         <a class="quick-link" href="#">
           <x-icon name="sync_alt" />
@@ -31,10 +38,12 @@
 
       <div class="services-wrap">
         <div class="service-grid">
-          <button class="service-item" type="button">
-            <x-icon name="mobile_friendly" />
-            <span>NẠP TIỀN ĐIỆN THOẠI</span>
-          </button>
+          @if ($canAccessFrontendTopup)
+            <a class="service-item" href="{{ route('frontend.topup') }}">
+              <x-icon name="mobile_friendly" />
+              <span>NẠP TIỀN ĐIỆN THOẠI</span>
+            </a>
+          @endif
 
           <button class="service-item" type="button">
             <x-icon name="phone_iphone" />
@@ -51,7 +60,7 @@
             <span>MUA THẺ ĐIỆN THOẠI</span>
           </button>
 
-          <button class="service-item " type="button">
+          <button class="service-item" type="button">
             <x-icon name="sports_esports" />
             <span>MUA THẺ GAME</span>
           </button>
@@ -110,4 +119,4 @@
       </section>
     </section>
   </main>
-  @endsection
+@endsection

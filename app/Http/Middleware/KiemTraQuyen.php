@@ -10,22 +10,30 @@ class KiemTraQuyen
 {
     public function handle(Request $request, Closure $next, string $maQuyen): Response
     {
-        // Nếu chưa đăng nhập thì chuyển về trang login
+        // NOTE: Neu chua dang nhap thi day ve login.
+        // Middleware nay chi xu ly quyen truy cap module/trang sau khi da co user.
         if (!auth()->check()) {
             return redirect()->route('login');
         }
 
-        // Lấy user đang đăng nhập
-        // Dòng @var giúp VS Code hiểu đây là App\Models\User
+        // NOTE: Lay user hien tai de kiem tra quyen tu cac vai tro dang duoc gan.
         /** @var \App\Models\User|null $user */
         $user = auth()->user();
 
-        // Nếu user không tồn tại hoặc không có quyền yêu cầu thì chặn
-        if (!$user || !$user->coQuyen($maQuyen)) {
+        // NOTE: Cho phep route truyen mot hoac nhieu ma quyen, cach nhau bang dau phay.
+        // Vi du: quyen:account.access hoac quyen:account.access,role.access.
+        $danhSachQuyen = collect(explode(',', $maQuyen))
+            ->map(fn ($quyen) => trim($quyen))
+            ->filter()
+            ->values()
+            ->all();
+
+        // NOTE: Neu user khong co bat ky quyen truy cap nao trong danh sach thi tra ve 403.
+        if (!$user || !$user->coMotTrongCacQuyen($danhSachQuyen)) {
             abort(403, 'Bạn không có quyền truy cập chức năng này.');
         }
 
-        // Nếu hợp lệ thì cho request đi tiếp
+        // NOTE: Co quyen truy cap thi cho request di tiep vao controller/view.
         return $next($request);
     }
 }

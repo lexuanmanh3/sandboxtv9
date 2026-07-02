@@ -191,12 +191,35 @@ class User extends Authenticatable
             ->exists();
     }
 
-    // Kiểm tra người dùng có quyền theo mã quyền không
+    /**
+     * NOTE: Kiem tra nguoi dung co quyen truy cap theo ma quyen hay khong.
+     *
+     * Trong project nay "quyen" duoc dung chinh cho quyen truy cap module/trang,
+     * vi du: account.access, role.access, report.access.
+     * Admin goc duoc phep qua tat ca quyen de tranh bi khoa he thong khi chua seed du lieu.
+     */
     public function coQuyen(string $maQuyen): bool
     {
         return $this->vaiTro()
+            ->where('vai_tro.trang_thai', 'hoat_dong')
             ->whereHas('quyen', function ($query) use ($maQuyen) {
-                $query->where('ma_quyen', $maQuyen);
+                $query->where('ma_quyen', $maQuyen)
+                    ->where('quyen.trang_thai', 'hoat_dong');
+            })
+            ->exists();
+    }
+
+    /**
+     * NOTE: Kiem tra user co it nhat mot quyen trong danh sach hay khong.
+     * Ham nay dung cho sidebar/menu, noi chi can biet co duoc hien nhom menu hay khong.
+     */
+    public function coMotTrongCacQuyen(array $maQuyen): bool
+    {
+        return $this->vaiTro()
+            ->where('vai_tro.trang_thai', 'hoat_dong')
+            ->whereHas('quyen', function ($query) use ($maQuyen) {
+                $query->whereIn('ma_quyen', $maQuyen)
+                    ->where('quyen.trang_thai', 'hoat_dong');
             })
             ->exists();
     }

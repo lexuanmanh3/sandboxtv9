@@ -12,6 +12,7 @@ class HomeController extends Controller
         return view('home');
     }
 
+    
     public function loaisanpham()
     {
         return view('loaisanpham');

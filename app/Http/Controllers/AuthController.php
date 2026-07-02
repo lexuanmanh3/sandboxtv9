@@ -21,7 +21,7 @@ class AuthController extends Controller
     public function showLoginForm()
     {
         if (Auth::check()) {
-            return redirect('/');
+            return redirect($this->duongDanSauDangNhap(Auth::user()));
         }
 
         return view('auth.login');
@@ -53,7 +53,7 @@ class AuthController extends Controller
         // Kiểm tra tài khoản tồn tại và mật khẩu hợp lệ
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return back()
-                ->withInput($request->only('ten_dang_nhap'))
+                ->withInput($request->only('ten_dang_nhap')) 
                 ->withErrors(['ten_dang_nhap' => 'Tên đăng nhập hoặc mật khẩu không đúng.']);
         }
 
@@ -81,7 +81,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         // Chuyển về trang người dùng muốn vào trước đó, hoặc về trang chủ
-        return redirect()->intended('/');
+        return redirect($this->duongDanSauDangNhap($user));
     }
 
     // -------------------------------------------------------------------------
@@ -94,7 +94,7 @@ class AuthController extends Controller
     public function showRegisterForm()
     {
         if (Auth::check()) {
-            return redirect('/');
+            return redirect($this->duongDanSauDangNhap(Auth::user()));
         }
 
         return view('auth.register');
@@ -175,7 +175,8 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect('/')->with('dangky_thanh_cong', 'Chào mừng ' . $user->ten_hien_thi . '! Tài khoản đã được tạo thành công.');
+        return redirect($this->duongDanSauDangNhap($user))
+            ->with('dangky_thanh_cong', 'Chào mừng ' . $user->ten_hien_thi . '! Tài khoản đã được tạo thành công.');
     }
 
     // -------------------------------------------------------------------------
@@ -198,5 +199,39 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login')->with('success', 'Bạn đã đăng xuất thành công.');
+    }
+
+    /**
+     * Chọn trang đầu tiên sau đăng nhập theo quyền truy cập của vai trò.
+     * Backend được ưu tiên vì tài khoản quản trị thường cần vào dashboard quản trị trước.
+     */
+    private function duongDanSauDangNhap(User $user): string
+    {
+        $adminRoutes = [
+            'dashboard.access' => route('admin.dashboard'),
+            'account.access' => route('admin.accounts'),
+            'role.access' => route('admin.roles'),
+        ];
+
+        foreach ($adminRoutes as $permission => $url) {
+            if ($user->coQuyen($permission)) {
+                return $url;
+            }
+        }
+
+        $frontendRoutes = [
+            'frontend.home.access' => route('frontend.home'),
+            'frontend.topup.access' => route('frontend.topup'),
+        ];
+
+        foreach ($frontendRoutes as $permission => $url) {
+            if ($user->coQuyen($permission)) {
+                return $url;
+            }
+        }
+
+        Auth::logout();
+
+        return route('login');
     }
 }

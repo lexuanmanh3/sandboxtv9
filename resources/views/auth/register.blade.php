@@ -6,7 +6,7 @@
   <title>VietFin - Đăng ký tài khoản</title>
 
   <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
-  <link rel="stylesheet" href="{{ asset('frontend/css/root.css') }}">
+  <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
   <link rel="stylesheet" href="{{ asset('frontend/css/auth-register.css') }}">
 </head>
 

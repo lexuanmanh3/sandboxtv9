@@ -10,6 +10,7 @@
 
   {{-- Font local: Be Vietnam Pro + Material Symbols (không dùng Google CDN) --}}
   <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
 
   {{-- CSS custom của trang auth --}}
   <link rel="stylesheet" href="{{ asset('frontend/css/auth-login.css') }}">

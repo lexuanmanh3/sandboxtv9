@@ -4,17 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sandbox</title>
-    <link rel="stylesheet" href="{{ asset('frontend/css/root.css') }}">
-    <link rel="stylesheet" href="{{ asset('frontend/css/home.css') }}">
-    {{-- Font local: Be Vietnam Pro (không dùng Google CDN) --}}
-    <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
+  <link rel="stylesheet" href="{{ asset('frontend/css/home.css') }}">
+  <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
 </head>
 <body>
   <x-icon-sprite />
 
+  @php
+    $currentUser = auth()->user();
+    $canAccessFrontendHome = $currentUser?->coQuyen('frontend.home.access');
+    $canAccessFrontendTopup = $currentUser?->coQuyen('frontend.topup.access');
+  @endphp
+
   <header class="site-header">
     <nav class="topbar container">
-      <a class="brand" href="#" aria-label="VietFin trang chủ"><img src="{{ asset('frontend/img/TV9TECH_logo_transparent – Đã sửa.png') }}" alt="VietFin"></a>
+      <a class="brand" href="{{ $canAccessFrontendHome ? route('frontend.home') : '#' }}" aria-label="VietFin trang chủ">
+        <img src="{{ asset('frontend/img/TV9TECH_logo_transparent – Đã sửa.png') }}" alt="VietFin">
+      </a>
 
       <button class="menu-toggle" type="button" aria-label="Mở menu" aria-expanded="false">
         <x-icon name="menu" class="menu-icon" />
@@ -22,65 +29,61 @@
       </button>
 
       <div class="nav-menu" id="mainMenu">
-        <a class="nav-link active" href="#">TRANG CHỦ</a>
-        <a class="nav-link" href="#">NẠP TIỀN ĐIỆN THOẠI</a>
-        <a class="nav-link" href="#">MUA MÃ THẺ</a>
-        <a class="nav-link" href="#">THANH TOÁN HÓA ĐƠN</a>
-        <a class="nav-link" href="#">TOPUP DATA</a>
+        @if ($canAccessFrontendHome)
+          <a class="nav-link {{ request()->routeIs('frontend.home') ? 'active' : '' }}" href="{{ route('frontend.home') }}">TRANG CHỦ</a>
+        @endif
+        @if ($canAccessFrontendTopup)
+          <a class="nav-link {{ request()->routeIs('frontend.topup') ? 'active' : '' }}" href="{{ route('frontend.topup') }}">NẠP TIỀN ĐIỆN THOẠI</a>
+        @endif
       </div>
 
-        <button class="icon-btn" type="button" aria-label="Thông báo">
-          <x-icon name="notifications" />
+      <button class="icon-btn" type="button" aria-label="Thông báo">
+        <x-icon name="notifications" />
+      </button>
+
+      <div class="user-dropdown" id="userDropdown">
+        <button
+          class="icon-btn"
+          type="button"
+          id="accountBtn"
+          aria-label="Tài khoản"
+          aria-expanded="false"
+          aria-controls="accountMenu"
+        >
+          <x-icon name="account_circle" />
         </button>
 
-        {{-- Nút tài khoản + menu cấp 2 --}}
-        <div class="user-dropdown" id="userDropdown">
-          <button
-            class="icon-btn"
-            type="button"
-            id="accountBtn"
-            aria-label="Tài khoản"
-            aria-expanded="false"
-            aria-controls="accountMenu"
-          >
-            <x-icon name="account_circle" />
-          </button>
-
-          {{-- Menu cấp 2 --}}
-          <div class="dropdown-menu" id="accountMenu" role="menu" aria-hidden="true">
-            {{-- Header: tên + username --}}
-            <div class="dropdown-header">
-              <x-icon name="account_circle" class="dropdown-header__icon" />
-              <div>
-                <strong>{{ auth()->user()->ten_hien_thi }}</strong>
-                <span>{{ auth()->user()->ten_dang_nhap }}</span>
-              </div>
+        <div class="dropdown-menu" id="accountMenu" role="menu" aria-hidden="true">
+          <div class="dropdown-header">
+            <x-icon name="account_circle" class="dropdown-header__icon" />
+            <div>
+              <strong>{{ auth()->user()->ten_hien_thi }}</strong>
+              <span>{{ auth()->user()->ten_dang_nhap }}</span>
             </div>
-
-            <hr class="dropdown-divider" />
-
-            <a href="#" class="dropdown-item" role="menuitem">
-              <x-icon name="person" />
-              Thông tin tài khoản
-            </a>
-            <a href="#" class="dropdown-item" role="menuitem">
-              <x-icon name="lock_reset" />
-              Đổi mật khẩu
-            </a>
-
-            <hr class="dropdown-divider" />
-
-            {{-- Nút đăng xuất — trigger JS submit form ẩn bên dưới --}}
-            <button
-              type="button"
-              class="dropdown-item dropdown-item--danger"
-              id="logoutBtn"
-              role="menuitem"
-            >
-              <x-icon name="logout" />
-              Đăng xuất
-            </button>
           </div>
+
+          <hr class="dropdown-divider" />
+
+          <a href="#" class="dropdown-item" role="menuitem">
+            <x-icon name="person" />
+            Thông tin tài khoản
+          </a>
+          <a href="#" class="dropdown-item" role="menuitem">
+            <x-icon name="lock_reset" />
+            Đổi mật khẩu
+          </a>
+
+          <hr class="dropdown-divider" />
+
+          <button
+            type="button"
+            class="dropdown-item dropdown-item--danger"
+            id="logoutBtn"
+            role="menuitem"
+          >
+            <x-icon name="logout" />
+            Đăng xuất
+          </button>
         </div>
       </div>
     </nav>
@@ -103,9 +106,9 @@
       </div>
     </div>
   </section>
-  {{-- Dịch vụ --}}
-@yield('content')
-  {{-- Footer --}}
+
+  @yield('content')
+
   <footer class="site-footer">
     <div class="footer-inner container">
       <div class="footer-brand">
@@ -126,7 +129,6 @@
     </div>
   </footer>
 
-  {{-- Form đăng xuất ẩn — submit bằng JS --}}
   <form id="logoutForm" method="POST" action="{{ route('logout') }}" style="display:none">
     @csrf
   </form>
