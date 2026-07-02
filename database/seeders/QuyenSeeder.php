@@ -57,6 +57,12 @@ class QuyenSeeder extends Seeder
                                         'nhom_quyen' => 'Quản lý danh mục',
                                         'thu_tu' => 10,
                                     ],
+                                    [
+                                        'ma_quyen' => 'loai_san_pham.access',
+                                        'ten_quyen' => 'Loại sản phẩm',
+                                        'nhom_quyen' => 'Quản lý danh mục',
+                                        'thu_tu' => 20,
+                                    ],
                                 ],
                             ],
                             [
@@ -198,6 +204,7 @@ class QuyenSeeder extends Seeder
             'inventory.access',
             'backend.catalog',
             'dich_vu.access',
+            'loai_san_pham.access',
             'backend.admin',
             'account.access',
             'role.access',

@@ -51,6 +51,8 @@
         $canAccessRoles = $currentUser?->coQuyen('role.access');
         $canAccessServiceConfig = $currentUser?->coQuyen('service_config.access');
         $canAccessServices = $currentUser?->coQuyen('dich_vu.access');
+        $canAccessCategories = $currentUser?->coQuyen('loai_san_pham.access');
+        $canAccessCatalogGroup = $currentUser?->coMotTrongCacQuyen(['dich_vu.access', 'loai_san_pham.access']);
         $canAccessAdminGroup = $currentUser?->coMotTrongCacQuyen(['account.access', 'role.access', 'service_config.access']);
         $adminHomeUrl = $canAccessDashboard
             ? route('admin.dashboard')
@@ -59,7 +61,7 @@
                 : ($canAccessRoles ? route('admin.roles') : '#'));
 
         $inventoryOpen = request()->routeIs('admin.dashboard');
-        $catalogOpen = request()->routeIs('admin.services', 'app.services');
+        $catalogOpen = request()->routeIs('admin.services', 'app.services', 'admin.categories', 'app.categories');
         $adminOpen = request()->routeIs('admin.accounts', 'app.users', 'admin.roles', 'app.roles');
       @endphp
 
@@ -85,7 +87,7 @@
           </div>
         @endif
 
-        @if ($canAccessServices)
+        @if ($canAccessCatalogGroup)
           <div class="admin-nav__group {{ $catalogOpen ? 'is-open' : '' }}" data-nav-group>
             <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $catalogOpen ? 'true' : 'false' }}">
               <span><x-icon name="sync_alt" /> Quản lý danh mục</span>
@@ -94,7 +96,12 @@
               </svg>
             </button>
             <div class="admin-nav__submenu">
-              <a class="{{ request()->routeIs('admin.services', 'app.services') ? 'is-active' : '' }}" href="{{ route('admin.services') }}">Dịch vụ</a>
+              @if ($canAccessServices)
+                <a class="{{ request()->routeIs('admin.services', 'app.services') ? 'is-active' : '' }}" href="{{ route('admin.services') }}">Dịch vụ</a>
+              @endif
+              @if ($canAccessCategories)
+                <a class="{{ request()->routeIs('admin.categories', 'app.categories') ? 'is-active' : '' }}" href="{{ route('admin.categories') }}">Loại sản phẩm</a>
+              @endif
             </div>
           </div>
         @endif

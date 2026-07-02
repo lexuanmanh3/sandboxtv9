@@ -137,6 +137,12 @@ Chú thích nhãn dùng trong tài liệu: `CRITICAL` (nghiêm trọng), `HTTP_M
 | POST | `/admin/services` | `admin.services.store` | `Admin\ServiceController@store` | Tạo dịch vụ | `auth, quyen:dich_vu.access` |
 | PUT | `/admin/services/{service}` | `admin.services.update` | `Admin\ServiceController@update` | Sửa dịch vụ | `auth, quyen:dich_vu.access` |
 | DELETE | `/admin/services/{service}` | `admin.services.destroy` | `Admin\ServiceController@destroy` | Xóa dịch vụ (chặn nếu còn dữ liệu liên kết) | `auth, quyen:dich_vu.access` |
+| GET | `/admin/categories` | `admin.categories` | `Admin\CategoryController@index` | Danh sách loại sản phẩm | `auth, quyen:loai_san_pham.access` |
+| GET | `/admin/categories/export` | `admin.categories.export` | `Admin\CategoryController@exportExcel` | Export Excel danh sách loại sản phẩm | `auth, quyen:loai_san_pham.access` |
+| GET | `/App/Categories` | `app.categories` | `Admin\CategoryController@index` | Alias URL, theo đúng convention `/App/Users`, `/App/Roles`, `/App/Services` | `auth, quyen:loai_san_pham.access` |
+| POST | `/admin/categories` | `admin.categories.store` | `Admin\CategoryController@store` | Tạo loại sản phẩm | `auth, quyen:loai_san_pham.access` |
+| PUT | `/admin/categories/{category}` | `admin.categories.update` | `Admin\CategoryController@update` | Sửa loại sản phẩm | `auth, quyen:loai_san_pham.access` |
+| DELETE | `/admin/categories/{category}` | `admin.categories.destroy` | `Admin\CategoryController@destroy` | Xóa loại sản phẩm (chặn nếu còn sản phẩm liên kết) | `auth, quyen:loai_san_pham.access` |
 
 ---
 
@@ -386,6 +392,7 @@ Ghi chú thêm: quyền `policy.access` và `report.access` được khai báo t
 - Quản lý vai trò & cây quyền truy cập module (gán/gỡ quyền `.access` cho vai trò, bao gồm checkbox "Mặc định" xác định vai trò gán tự động cho tài khoản mới).
 - CSRF, hash mật khẩu, chống session fixation, mass-assignment protection cho toàn bộ luồng user.
 - **Quản lý dịch vụ** (`/admin/services`, alias `/App/Services`) — CRUD đầy đủ (tạo/sửa/xóa/xem chi tiết), filter theo mã/tên/trạng thái, export Excel, quyền riêng `dich_vu.access` dưới nhóm menu "Quản lý danh mục". `ServiceController`, `StoreDichVuRequest`/`UpdateDichVuRequest`, `ServicesExport`, view `admin/services.blade.php`, JS `admin-services.js`.
+- **Quản lý loại sản phẩm** (`/admin/categories`, alias `/App/Categories`) — CRUD đầy đủ (tạo/sửa/xóa/xem chi tiết), filter theo mã/tên/dịch vụ/trạng thái, export Excel, hỗ trợ chọn "Dịch vụ" (bắt buộc) và "Loại cha" (tùy chọn, cây danh mục) khi tạo/sửa, quyền riêng `loai_san_pham.access` cùng nhóm "Quản lý danh mục". `CategoryController`, `StoreLoaiSanPhamRequest`/`UpdateLoaiSanPhamRequest`, `CategoriesExport`, view `admin/categories.blade.php`, JS `admin-categories.js`. Field `hinh_anh` hiện là input text (URL/đường dẫn) vì dự án chưa có hạ tầng upload file.
 
 ### Đang làm dở
 - Trang chủ & "Nạp tiền điện thoại" — có giao diện, controller chỉ trả view trơn, chưa nối `dich_vu/san_pham/don_hang`.
@@ -394,7 +401,8 @@ Ghi chú thêm: quyền `policy.access` và `report.access` được khai báo t
 - 5 TODO audit log trong `UserAccountController`.
 
 ### Chưa có
-- Toàn bộ Controller/Route/View cho: loại sản phẩm, sản phẩm, nhà cung cấp, kết nối nhà cung cấp, cấu hình dịch vụ (`cau_hinh_dich_vu` — khác với module "Dịch vụ" vừa làm), đại lý API, cấu hình API đại lý, đơn hàng, lịch sử trạng thái đơn hàng, log API, lần gọi nhà cung cấp (dù đã có đầy đủ migration + model). Module "Dịch vụ" (`dich_vu`) đã hoàn thành, xem mục "Đã hoàn thành".
+- Toàn bộ Controller/Route/View cho: sản phẩm, nhà cung cấp, kết nối nhà cung cấp, cấu hình dịch vụ (`cau_hinh_dich_vu` — khác với module "Dịch vụ"), đại lý API, cấu hình API đại lý, đơn hàng, lịch sử trạng thái đơn hàng, log API, lần gọi nhà cung cấp (dù đã có đầy đủ migration + model). Module "Dịch vụ" và "Loại sản phẩm" đã hoàn thành, xem mục "Đã hoàn thành".
+- Hạ tầng upload file (ảnh/logo) — chưa có ở bất kỳ module nào, `hinh_anh` của "Loại sản phẩm" hiện chỉ nhận URL nhập tay.
 - 5/6 method của `CustomerController` (create/store/show/edit/update/destroy).
 - Flow tự đổi mật khẩu của chính người dùng.
 - Flow xác minh email (dù có cột `email_da_xac_nhan`).

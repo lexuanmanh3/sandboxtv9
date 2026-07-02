@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Admin\RoleAccessController;
 use App\Http\Controllers\Admin\UserAccountController;
 use App\Http\Controllers\Admin\ServiceController;
+use App\Http\Controllers\Admin\CategoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -61,7 +62,7 @@ Route::middleware(['auth', 'quyen:role.access'])->group(function () {
     Route::get('/admin/roles', [RoleAccessController::class, 'index'])->name('admin.roles');
     Route::get('/App/Roles', [RoleAccessController::class, 'index'])->name('app.roles');
     Route::put('/admin/roles/{role}/permissions', [RoleAccessController::class, 'updatePermissions'])->name('admin.roles.permissions');
-});
+}); 
 
 // NOTE: Module Dich vu dung quyen dich_vu.access - quan ly danh muc dich vu lon
 // (TOPUP, PIN_CODE, PAY_BILL...), khac voi service_config.access (cau hinh NCC xu ly).
@@ -72,6 +73,17 @@ Route::middleware(['auth', 'quyen:dich_vu.access'])->group(function () {
     Route::post('/admin/services', [ServiceController::class, 'store'])->name('admin.services.store');
     Route::put('/admin/services/{service}', [ServiceController::class, 'update'])->name('admin.services.update');
     Route::delete('/admin/services/{service}', [ServiceController::class, 'destroy'])->name('admin.services.destroy');
+});
+
+// NOTE: Module Loai san pham dung quyen loai_san_pham.access - quan ly nhom san pham
+// thuoc tung dich vu (vd Viettel/Mobifone thuoc dich vu PIN_CODE).
+Route::middleware(['auth', 'quyen:loai_san_pham.access'])->group(function () {
+    Route::get('/admin/categories', [CategoryController::class, 'index'])->name('admin.categories');
+    Route::get('/admin/categories/export', [CategoryController::class, 'exportExcel'])->name('admin.categories.export');
+    Route::get('/App/Categories', [CategoryController::class, 'index'])->name('app.categories');
+    Route::post('/admin/categories', [CategoryController::class, 'store'])->name('admin.categories.store');
+    Route::put('/admin/categories/{category}', [CategoryController::class, 'update'])->name('admin.categories.update');
+    Route::delete('/admin/categories/{category}', [CategoryController::class, 'destroy'])->name('admin.categories.destroy');
 });
 
 
