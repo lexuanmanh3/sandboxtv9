@@ -279,7 +279,7 @@ class UserAccountController extends Controller
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['required', 'integer', 'exists:nguoi_dung,id'],
+            'ids.*' => ['required', 'integer', 'exists:users,id'],
         ]);
 
         $ids = $validated['ids'];
@@ -319,11 +319,26 @@ class UserAccountController extends Controller
 
     /**
      * Sync vai tro bang pivot nguoi_dung_vai_tro da co san.
-     * Neu form khong chon vai tro nao, gan vai tro mac dinh (mac_dinh=true trong bang vai_tro)
-     * de tranh tao ra tai khoan khong co vai tro nao.
+     * Kiểm tra quyền của operator: chống nâng quyền (privilege escalation).
+     * Chỉ admin gốc mới được gán vai trò admin cho tài khoản khác.
      */
     private function syncRoles(User $user, array $roleIds): void
     {
+        $operator = auth()->user();
+
+        // Kiểm tra quyền gán vai trò
+        if ($operator && !$operator->coQuyen('role.assign_permission') && !$this->isRootAdmin($operator)) {
+            return;
+        }
+
+        // Không cho phép tài khoản không phải admin gốc gán vai trò admin
+        $adminRole = VaiTro::where('ma_vai_tro', 'admin')->first();
+        if ($adminRole && in_array((int) $adminRole->id, array_map('intval', $roleIds), true)) {
+            if (!$operator || !$this->isRootAdmin($operator)) {
+                abort(403, 'Chỉ Quản trị viên hệ thống mới có quyền cấp vai trò Admin.');
+            }
+        }
+
         if (empty($roleIds)) {
             $roleIds = [VaiTro::vaiTroMacDinh()->id];
         }

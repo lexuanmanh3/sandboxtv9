@@ -101,7 +101,51 @@ class QuyenSeeder extends Seeder
                                         'nhom_quyen' => 'Quản trị',
                                         'thu_tu' => 30,
                                     ],
+                                    [
+                                        'ma_quyen' => 'audit_log.access',
+                                        'ten_quyen' => 'Nhật ký hoạt động',
+                                        'nhom_quyen' => 'Quản trị',
+                                        'thu_tu' => 40,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'maintenance.access',
+                                        'ten_quyen' => 'Bảo trì hệ thống',
+                                        'nhom_quyen' => 'Quản trị',
+                                        'thu_tu' => 50,
+                                    ],
                                 ],
+                            ],
+                            [
+                                'ma_quyen' => 'backend.products',
+                                'ten_quyen' => 'Quản lý sản phẩm',
+                                'nhom_quyen' => 'Quản lý sản phẩm',
+                                'thu_tu' => 50,
+                                'children' => [
+                                    [
+                                        'ma_quyen' => 'product.access',
+                                        'ten_quyen' => 'Sản phẩm',
+                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'thu_tu' => 10,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'provider_product.access',
+                                        'ten_quyen' => 'Sản phẩm nhà cung cấp',
+                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'thu_tu' => 20,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'provider_error_code.access',
+                                        'ten_quyen' => 'Mã lỗi nhà cung cấp',
+                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'thu_tu' => 30,
+                                    ],
+                                ],
+                            ],
+                            [
+                                'ma_quyen' => 'order.access',
+                                'ten_quyen' => 'Quản lý đơn hàng',
+                                'nhom_quyen' => 'Quản lý đơn hàng',
+                                'thu_tu' => 60,
                             ],
                         ],
                     ],
@@ -150,6 +194,36 @@ class QuyenSeeder extends Seeder
                 ['loai_san_pham.view', 'Xem loại sản phẩm'], ['loai_san_pham.create', 'Tạo loại sản phẩm'],
                 ['loai_san_pham.update', 'Sửa loại sản phẩm'], ['loai_san_pham.delete', 'Xóa loại sản phẩm'],
                 ['loai_san_pham.export', 'Xuất loại sản phẩm'],
+            ],
+            'service_config.access' => [
+                ['service_config.view', 'Xem nhà cung cấp'], ['service_config.create', 'Thêm nhà cung cấp'],
+                ['service_config.update', 'Sửa nhà cung cấp'], ['service_config.delete', 'Xóa nhà cung cấp'],
+                ['service_config.test', 'Kiểm tra kết nối'], ['service_config.reset_circuit', 'Đặt lại circuit breaker'],
+            ],
+            'product.access' => [
+                ['product.view', 'Xem sản phẩm'], ['product.create', 'Tạo sản phẩm'],
+                ['product.update', 'Sửa sản phẩm'], ['product.delete', 'Xóa sản phẩm'],
+                ['product.map', 'Map sản phẩm NCC'], ['product.sync', 'Đồng bộ từ NCC'],
+            ],
+            'provider_product.access' => [
+                ['provider_product.view', 'Xem sản phẩm NCC'], ['provider_product.create', 'Tạo sản phẩm NCC'],
+                ['provider_product.update', 'Sửa sản phẩm NCC'], ['provider_product.delete', 'Xóa sản phẩm NCC'],
+                ['provider_product.map', 'Map sản phẩm'], ['provider_product.sync', 'Đồng bộ sản phẩm NCC'],
+            ],
+            'provider_error_code.access' => [
+                ['provider_error_code.view', 'Xem mã lỗi NCC'], ['provider_error_code.create', 'Tạo mã lỗi NCC'],
+                ['provider_error_code.update', 'Sửa mã lỗi NCC'], ['provider_error_code.delete', 'Xóa mã lỗi NCC'],
+            ],
+            'order.access' => [
+                ['order.view', 'Xem đơn hàng'], ['order.export', 'Xuất đơn hàng'],
+                ['order.refund', 'Hoàn tiền đơn hàng'],
+            ],
+            'audit_log.access' => [
+                ['audit_log.view', 'Xem nhật ký'], ['audit_log.export', 'Xuất nhật ký'],
+            ],
+            'maintenance.access' => [
+                ['maintenance.view', 'Xem trang bảo trì'], ['maintenance.clear_cache', 'Xóa cache'],
+                ['maintenance.download_logs', 'Tải xuống log'],
             ],
         ]);
         $this->migrateLegacyAccessGrants();
@@ -216,6 +290,9 @@ class QuyenSeeder extends Seeder
         $parentCodes = [
             'dashboard.access', 'account.access', 'role.access',
             'dich_vu.access', 'loai_san_pham.access',
+            'service_config.access', 'product.access',
+            'provider_product.access', 'provider_error_code.access',
+            'order.access', 'audit_log.access', 'maintenance.access',
         ];
 
         foreach (DB::table('quyen')->whereIn('ma_quyen', $parentCodes)->get() as $parent) {

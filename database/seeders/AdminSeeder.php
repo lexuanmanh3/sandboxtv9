@@ -10,63 +10,55 @@ class AdminSeeder extends Seeder
 {
     public function run(): void
     {
-        // NOTE: Tạo hoặc cập nhật tài khoản admin đầu tiên.
-        // Dùng updateOrInsert để chạy seeder nhiều lần không bị trùng tài khoản.
-        // Điều kiện tìm là ten_dang_nhap = admin.
-        DB::table('users')->updateOrInsert(
-            ['ten_dang_nhap' => 'admin'],
+        // NOTE: Chỉ tạo admin lần đầu nếu chưa tồn tại.
+        // KHÔNG bao giờ ghi đè mật khẩu của admin đã có (tránh reset mật khẩu mỗi lần deploy).
+        $exists = DB::table('users')->where('ten_dang_nhap', 'admin')->exists();
 
-            // NOTE: Đây là dữ liệu sẽ được thêm mới hoặc cập nhật vào bảng users.
-            // Các field bên dưới viết đúng theo cột đang có trong database của bạn.
-            [
-                'ten_dang_nhap' => 'admin',
-                'email' => 'admin@example.com',
-                'so_dien_thoai' => '0965657810',
+        if ($exists) {
+            $this->command->info('[AdminSeeder] Tài khoản admin đã tồn tại — bỏ qua, KHÔNG đặt lại mật khẩu.');
+        } else {
+            // Lấy mật khẩu từ biến môi trường — KHÔNG hard-code
+            $initialPassword = env('ADMIN_INITIAL_PASSWORD');
 
-                // NOTE: password là cột đăng nhập chuẩn của Laravel.
-                // Hash::make giúp mã hóa mật khẩu trước khi lưu vào database.
-                'password' => Hash::make('12345678'),
+            if (empty($initialPassword)) {
+                if (app()->environment('production')) {
+                    // Production: dừng hẳn nếu thiếu biến — an toàn hơn là tạo với mật khẩu yếu
+                    $this->command->error('[AdminSeeder] Thiếu biến ADMIN_INITIAL_PASSWORD trên production. Seeder dừng lại.');
+                    return;
+                }
+                // Local/testing: dùng giá trị tạm thời để dev thuận tiện
+                $initialPassword = 'ChangeMe@Local!';
+                $this->command->warn('[AdminSeeder] Dùng mật khẩu mặc định local. Đặt ADMIN_INITIAL_PASSWORD trong .env để kiểm soát.');
+            }
 
-                // NOTE: ho, ten dùng để tách họ và tên riêng.
-                // name dùng cho Laravel mặc định hoặc hiển thị nhanh full name.
-                'ho' => 'System',
-                'ten' => 'Admin',
-                'name' => 'System Admin',
-
-                // NOTE: loai_tai_khoan dùng để phân loại tài khoản.
-                // Sau này có thể có admin, backend, ke_toan, agent, agent_api, customer.
-                'loai_tai_khoan' => 'admin',
-
-                // NOTE: email_verified_at là cột mặc định Laravel dùng để biết email đã xác minh chưa.
-                // Gán now() nghĩa là tài khoản admin coi như đã xác minh email.
-                'email_verified_at' => now(),
-
-                // NOTE: Các cột boolean này dùng để kiểm soát trạng thái xác thực và bảo mật tài khoản.
-                'email_da_xac_nhan' => true,
-                'tai_khoan_da_xac_thuc' => true,
-                'bat_buoc_doi_mat_khau' => false,
+            DB::table('users')->insert([
+                'ten_dang_nhap'          => 'admin',
+                'email'                  => env('ADMIN_INITIAL_EMAIL', 'admin@example.com'),
+                'so_dien_thoai'          => null,
+                'password'               => Hash::make($initialPassword),
+                'ho'                     => 'System',
+                'ten'                    => 'Admin',
+                'name'                   => 'System Admin',
+                'loai_tai_khoan'         => 'admin',
+                'email_verified_at'      => now(),
+                'email_da_xac_nhan'      => true,
+                'tai_khoan_da_xac_thuc'  => true,
+                // Bắt buộc đổi mật khẩu lần đăng nhập đầu tiên
+                'bat_buoc_doi_mat_khau'  => true,
                 'tu_dong_khoa_tai_khoan' => false,
-                'bi_khoa' => false,
+                'bi_khoa'                => false,
+                'trang_thai'             => 'hoat_dong',
+                'lan_dang_nhap_cuoi'     => null,
+                'remember_token'         => null,
+                'created_at'             => now(),
+                'updated_at'             => now(),
+            ]);
 
-                // NOTE: trang_thai dùng để bật/tắt tài khoản.
-                // hoat_dong nghĩa là tài khoản được phép sử dụng.
-                'trang_thai' => 'hoat_dong',
+            // Không ghi mật khẩu vào log — chỉ thông báo tài khoản đã được tạo
+            $this->command->info('[AdminSeeder] Tạo tài khoản admin thành công. Vui lòng đổi mật khẩu ngay sau lần đăng nhập đầu tiên.');
+        }
 
-                // NOTE: lan_dang_nhap_cuoi để lưu thời điểm đăng nhập gần nhất.
-                // Lúc mới seed thì chưa đăng nhập nên để null.
-                'lan_dang_nhap_cuoi' => null,
-
-                // NOTE: remember_token là token "remember me" của Laravel.
-                // Khi tạo admin ban đầu chưa cần token nên để null.
-                'remember_token' => null,
-
-                // NOTE: created_at và updated_at là timestamps mặc định của Laravel.
-                // Dùng để biết dòng dữ liệu được tạo/cập nhật khi nào.
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
-
+        // Gán vai trò admin (luôn thực hiện, dù vừa tạo hay đã tồn tại)
         $adminUser = DB::table('users')
             ->where('ten_dang_nhap', 'admin')
             ->first();
@@ -82,7 +74,7 @@ class AdminSeeder extends Seeder
         DB::table('nguoi_dung_vai_tro')->updateOrInsert(
             [
                 'nguoi_dung_id' => $adminUser->id,
-                'vai_tro_id' => $adminRole->id,
+                'vai_tro_id'    => $adminRole->id,
             ],
             [
                 'tao_luc' => now(),
@@ -90,3 +82,4 @@ class AdminSeeder extends Seeder
         );
     }
 }
+

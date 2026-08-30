@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Enums\TrangThaiDonHang;
+use App\Exceptions\IdempotencyKeyExistsException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Frontend\CreateTopupOrderRequest;
 use App\Http\Requests\Frontend\PreviewTopupRequest;
@@ -165,15 +166,6 @@ class TopupApiController extends Controller
         $phone           = $request->phone;
         $idempotencyKey  = $request->idempotency_key;
 
-        // ── Kiểm tra idempotency: cùng key không tạo 2 đơn ──
-        $existing = DonHang::where('idempotency_key', $idempotencyKey)
-            ->where('nguoi_dung_id', $userId)
-            ->first();
-
-        if ($existing) {
-            return $this->formatOrderResponse($existing, true);
-        }
-
         // ── Lấy sản phẩm và giá từ DB ── (không tin dữ liệu frontend)
         $product = SanPham::where('id', $productId)
             ->whereIn('trang_thai', ['hoat_dong', 'ACTIVE'])
@@ -201,6 +193,16 @@ class TopupApiController extends Controller
                 $userId, $product, $dichVu, $phone, $giaBan, $chietKhau,
                 $nhaMangThucTe, $idempotencyKey, $request
             ) {
+                // ── Kiểm tra idempotency BÊN TRONG transaction với lockForUpdate (chống race condition) ──
+                $existing = DonHang::lockForUpdate()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->where('nguoi_dung_id', $userId)
+                    ->first();
+
+                if ($existing) {
+                    throw new IdempotencyKeyExistsException($existing);
+                }
+
                 $maDonHang = 'TU' . now()->format('ymdHis') . strtoupper(Str::random(4));
 
                 $donHang = DonHang::create([
@@ -246,6 +248,24 @@ class TopupApiController extends Controller
 
                 return $donHang;
             });
+        } catch (IdempotencyKeyExistsException $e) {
+            // Request trùng lập hợp lệ — trả về đơn đã tồn tại
+            return $this->formatOrderResponse($e->getOrder(), true);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Bắt duplicate key từ unique constraint DB (lớp bảo vệ thứ 2)
+            if ($e->getCode() === '23000' || str_contains($e->getMessage(), 'uq_don_hang_user_idempotency')) {
+                $existing = DonHang::where('idempotency_key', $idempotencyKey)
+                    ->where('nguoi_dung_id', $userId)
+                    ->first();
+                if ($existing) {
+                    return $this->formatOrderResponse($existing, true);
+                }
+            }
+            Log::error('Topup order create DB error', [
+                'user_id' => $userId,
+                'error'   => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống. Vui lòng thử lại sau.'], 500);
         } catch (\RuntimeException $e) {
             // Lỗi nghiệp vụ: số dư không đủ, ví bị khóa...
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);

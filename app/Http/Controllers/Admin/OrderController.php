@@ -42,9 +42,9 @@ class OrderController extends Controller
                     ->orWhere('ma_loi_he_thong', 'like', "%{$q}%")
                     ->orWhereHas('nguoiDung', function ($uq) use ($q) {
                         $uq->where('name', 'like', "%{$q}%")
-                           ->orWhere('username', 'like', "%{$q}%")
+                           ->orWhere('ten_dang_nhap', 'like', "%{$q}%")
                            ->orWhere('email', 'like', "%{$q}%")
-                           ->orWhere('phone', 'like', "%{$q}%");
+                           ->orWhere('so_dien_thoai', 'like', "%{$q}%");
                     });
             });
         }
@@ -91,7 +91,11 @@ class OrderController extends Controller
             'total_revenue'  => (float) DonHang::whereIn('trang_thai_don_hang', ['SUCCESS', 'thanh_cong'])->sum('gia_ban'),
             'total_profit'   => (float) DonHang::whereIn('trang_thai_don_hang', ['SUCCESS', 'thanh_cong'])->sum('loi_nhuan'),
             'success_count'  => DonHang::whereIn('trang_thai_don_hang', ['SUCCESS', 'thanh_cong'])->count(),
-            'pending_count'  => DonHang::whereIn('trang_thai_don_hang', ['PENDING', 'PROCESSING', 'cho_xu_ly', 'dang_xu_ly'])->count(),
+            'pending_count'  => DonHang::whereIn('trang_thai_don_hang', [
+                'CREATED', 'WAITING_PAYMENT', 'PAID', 'QUEUED',
+                'PROCESSING', 'PROVIDER_PENDING', 'MANUAL_REVIEW',
+                'cho_xu_ly', 'dang_xu_ly',
+            ])->count(),
             'failed_count'   => DonHang::whereIn('trang_thai_don_hang', ['FAILED', 'that_bai'])->count(),
             'refunded_count' => DonHang::whereIn('trang_thai_don_hang', ['REFUNDED', 'da_hoan_tien'])->count(),
         ];
@@ -199,7 +203,7 @@ class OrderController extends Controller
                         $o->id,
                         $o->ma_don_hang,
                         optional($o->created_at)->format('d/m/Y H:i:s') ?? '',
-                        $o->nguoiDung?->name ?? $o->nguoiDung?->username ?? 'Khách lẻ',
+                        $o->nguoiDung?->name ?? $o->nguoiDung?->ten_dang_nhap ?? 'Khách lẻ',
                         $o->tai_khoan_nhan ?? '',
                         $o->dichVu?->ten_dich_vu ?? '',
                         $o->loaiSanPham?->ten_loai_san_pham ?? '',
@@ -221,46 +225,56 @@ class OrderController extends Controller
     }
 
     /**
-     * Admin hoàn tiền thủ công cho đơn hàng (MANUAL_REVIEW, PROVIDER_PENDING, PROCESSING, FAILED).
+     * Admin hoàn tiền thủ công cho đơn hàng.
+     * Chỉ cho phép từ trạng thái hợp lệ: FAILED, MANUAL_REVIEW, PROVIDER_PENDING, PROCESSING.
+     * Dùng lockForUpdate() bên trong transaction để chống hoàn tiền 2 lần đồng thời.
      */
     public function refund(Request $request, int $id, \App\Services\Topup\DonHangStateMachine $state): RedirectResponse
     {
-        $order = DonHang::findOrFail($id);
+        $reason = trim((string) $request->input('ly_do_hoan_tien', 'Admin hoàn tiền thủ công'));
 
-        if ($order->trang_thai_thanh_toan === 'REFUNDED' || $order->trang_thai_don_hang === 'REFUNDED') {
-            return back()->withErrors(['refund' => 'Đơn hàng này đã được hoàn tiền từ trước.']);
-        }
+        $donHang = null;
 
-        $reason = trim((string) $request->input('ly_do_hoan_tien', 'Admin hoàn tiền ví thủ công cho khách'));
+        try {
+            DB::transaction(function () use ($id, $state, $reason, &$donHang) {
+                // lockForUpdate() bên trong transaction — chặn race condition hoàn tiền 2 lần
+                $donHang = DonHang::lockForUpdate()->findOrFail($id);
 
-        DB::transaction(function () use ($order, $state, $reason) {
-            // Hoàn tiền vào ví người dùng nếu có tài khoản
-            if ($order->nguoi_dung_id && (float) $order->gia_ban > 0) {
-                $this->viService->hoanTien(
-                    userId: $order->nguoi_dung_id,
-                    soTien: (float) $order->gia_ban,
-                    donHang: $order,
-                    moTa: "Hoàn tiền đơn hàng #{$order->ma_don_hang}: {$reason}"
-                );
-            }
+                // Kiểm tra trạng thái SAU KHI đã lock (không tin dữ liệu trước lock)
+                $validRefundStatuses = ['FAILED', 'MANUAL_REVIEW', 'PROVIDER_PENDING', 'PROCESSING'];
+                $currentStatus = strtoupper((string) $donHang->trang_thai_don_hang);
 
-            try {
-                $adminName = auth()->user()?->username ?? 'admin';
-                $state->chuyen($order, \App\Enums\TrangThaiDonHang::REFUNDED, $reason, "admin_{$adminName}");
-            } catch (\Throwable $e) {
-                $order->update([
-                    'trang_thai_don_hang' => 'REFUNDED',
+                if ($donHang->trang_thai_thanh_toan === 'REFUNDED' || $currentStatus === 'REFUNDED') {
+                    throw new \RuntimeException('Đơn hàng này đã được hoàn tiền từ trước.');
+                }
+
+                if (!in_array($currentStatus, $validRefundStatuses, true)) {
+                    throw new \RuntimeException("Không thể hoàn tiền đơn hàng ở trạng thái: {$currentStatus}.");
+                }
+
+                // Hoàn tiền vào ví người dùng nếu có tài khoản
+                if ($donHang->nguoi_dung_id && (float) $donHang->gia_ban > 0) {
+                    $this->viService->hoanTien(
+                        userId: $donHang->nguoi_dung_id,
+                        soTien: (float) $donHang->gia_ban,
+                        donHang: $donHang,
+                        moTa: "Hoàn tiền đơn hàng #{$donHang->ma_don_hang}: {$reason}"
+                    );
+                }
+
+                // Chuyển trạng thái qua state machine — KHÔNG ép trực tiếp bypass state machine
+                $adminName = auth()->user()?->ten_dang_nhap ?? 'admin';
+                $state->chuyen($donHang, \App\Enums\TrangThaiDonHang::REFUNDED, $reason, "admin_{$adminName}");
+                $donHang->update([
                     'trang_thai_thanh_toan' => 'REFUNDED',
                     'thong_bao_loi_he_thong' => $reason,
                 ]);
-            }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['refund' => $e->getMessage()]);
+        }
 
-            $order->update([
-                'trang_thai_thanh_toan' => 'REFUNDED',
-                'thong_bao_loi_he_thong' => $reason,
-            ]);
-        });
-
-        return back()->with('success', "Đã hoàn tiền thành công " . number_format($order->gia_ban, 0, ',', '.') . "đ cho đơn hàng #{$order->ma_don_hang}.");
+        return back()->with('success', "Đã hoàn tiền thành công " . number_format($donHang->gia_ban, 0, ',', '.') . "đ cho đơn hàng #{$donHang->ma_don_hang}.");
     }
+
 }

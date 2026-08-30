@@ -163,9 +163,10 @@ class ProcessMobileTopupJob implements ShouldQueue
 
                     // Kích hoạt Circuit Breaker nếu chạm hoặc vượt ngưỡng lỗi liên tiếp (mặc định 3 lỗi)
                     if ($maxConsecutiveFailures > 0 && $currentFailures >= $maxConsecutiveFailures) {
-                        $mapping->ketNoi->update(['trang_thai' => 'tam_dung']);
-                        $mapping->nhaCungCap?->update(['trang_thai' => 'tam_dung']);
-                        $telegramAlert->alertCircuitBreakerTriggered($mapping->ketNoi, $currentFailures, $suspendSeconds);
+                        $suspendTTL = $suspendSeconds > 0 ? $suspendSeconds : 300;
+                        Cache::put("circuit_breaker_tripped_{$mapping->ket_noi_nha_cung_cap_id}", true, now()->addSeconds($suspendTTL));
+                        Cache::forget($cacheKey); // Reset đếm lỗi sau khi đã ngắt
+                        $telegramAlert->alertCircuitBreakerTriggered($mapping->ketNoi, $currentFailures, $suspendTTL);
                     }
                 }
             }

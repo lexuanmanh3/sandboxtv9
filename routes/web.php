@@ -51,13 +51,13 @@ Route::prefix('api/topup')->name('api.topup.')->group(function () {
 
 // ===== XÁC THỰC — Chỉ truy cập khi CHƯA đăng nhập =====
 Route::middleware('guest')->group(function () {
-    // Đăng nhập
+    // Đăng nhập — rate limit 5 lần/phút/IP để chống brute-force
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.submit')->middleware('throttle:5,1');
 
-    // Đăng ký
+    // Đăng ký — rate limit 3 lần/phút/IP để chống spam tạo tài khoản
     Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
-    Route::post('/register', [AuthController::class, 'register'])->name('register.submit');
+    Route::post('/register', [AuthController::class, 'register'])->name('register.submit')->middleware('throttle:3,1');
 });
 
 // Đăng xuất — chỉ khi đang đăng nhập
@@ -123,64 +123,64 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/admin/providers/bulk-delete', [ProviderController::class, 'bulkDestroy'])->name('admin.providers.bulk-delete')->middleware('quyen:service_config.access');
 });
 
-// NOTE: Module San pham
+// NOTE: Module San pham — phân quyền chi tiết theo hành động
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/products', [ProductController::class, 'index'])->name('admin.products');
-    Route::post('/admin/products', [ProductController::class, 'store'])->name('admin.products.store');
-    Route::put('/admin/products/{product}', [ProductController::class, 'update'])->name('admin.products.update');
-    Route::patch('/admin/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->name('admin.products.toggle-status');
-    Route::delete('/admin/products/{product}', [ProductController::class, 'destroy'])->name('admin.products.destroy');
-    Route::post('/admin/products/bulk-delete', [ProductController::class, 'bulkDestroy'])->name('admin.products.bulk-delete');
-    Route::post('/admin/products/{product}/mappings', [ProductController::class, 'saveProviderMapping'])->name('admin.products.mappings.save');
-    Route::delete('/admin/products/mappings/{mapping}', [ProductController::class, 'deleteProviderMapping'])->name('admin.products.mappings.destroy');
-    Route::post('/admin/products/sync-from-provider', [ProductController::class, 'syncFromProvider'])->name('admin.products.sync-from-provider');
+    Route::get('/admin/products', [ProductController::class, 'index'])->name('admin.products')->middleware('quyen:product.view');
+    Route::post('/admin/products', [ProductController::class, 'store'])->name('admin.products.store')->middleware('quyen:product.create');
+    Route::put('/admin/products/{product}', [ProductController::class, 'update'])->name('admin.products.update')->middleware('quyen:product.update');
+    Route::patch('/admin/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->name('admin.products.toggle-status')->middleware('quyen:product.update');
+    Route::delete('/admin/products/{product}', [ProductController::class, 'destroy'])->name('admin.products.destroy')->middleware('quyen:product.delete');
+    Route::post('/admin/products/bulk-delete', [ProductController::class, 'bulkDestroy'])->name('admin.products.bulk-delete')->middleware('quyen:product.delete');
+    Route::post('/admin/products/{product}/mappings', [ProductController::class, 'saveProviderMapping'])->name('admin.products.mappings.save')->middleware('quyen:product.map');
+    Route::delete('/admin/products/mappings/{mapping}', [ProductController::class, 'deleteProviderMapping'])->name('admin.products.mappings.destroy')->middleware('quyen:product.map');
+    Route::post('/admin/products/sync-from-provider', [ProductController::class, 'syncFromProvider'])->name('admin.products.sync-from-provider')->middleware('quyen:product.sync');
 });
 
-// NOTE: Module San pham Nha Cung Cap (CPT riêng)
+// NOTE: Module San pham Nha Cung Cap — phân quyền chi tiết
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/provider-products', [ProviderProductController::class, 'index'])->name('admin.provider-products');
-    Route::post('/admin/provider-products', [ProviderProductController::class, 'store'])->name('admin.provider-products.store');
-    Route::put('/admin/provider-products/{providerProduct}', [ProviderProductController::class, 'update'])->name('admin.provider-products.update');
-    Route::post('/admin/provider-products/{providerProduct}/map', [ProviderProductController::class, 'mapProduct'])->name('admin.provider-products.map');
-    Route::patch('/admin/provider-products/{providerProduct}/toggle-status', [ProviderProductController::class, 'toggleStatus'])->name('admin.provider-products.toggle-status');
-    Route::delete('/admin/provider-products/{providerProduct}', [ProviderProductController::class, 'destroy'])->name('admin.provider-products.destroy');
-    Route::post('/admin/provider-products/bulk-delete', [ProviderProductController::class, 'bulkDestroy'])->name('admin.provider-products.bulk-delete');
-    Route::post('/admin/provider-products/sync', [ProviderProductController::class, 'syncFromProvider'])->name('admin.provider-products.sync');
-    Route::post('/admin/provider-products/auto-map', [ProviderProductController::class, 'autoMap'])->name('admin.provider-products.auto-map');
+    Route::get('/admin/provider-products', [ProviderProductController::class, 'index'])->name('admin.provider-products')->middleware('quyen:provider_product.view');
+    Route::post('/admin/provider-products', [ProviderProductController::class, 'store'])->name('admin.provider-products.store')->middleware('quyen:provider_product.create');
+    Route::put('/admin/provider-products/{providerProduct}', [ProviderProductController::class, 'update'])->name('admin.provider-products.update')->middleware('quyen:provider_product.update');
+    Route::post('/admin/provider-products/{providerProduct}/map', [ProviderProductController::class, 'mapProduct'])->name('admin.provider-products.map')->middleware('quyen:provider_product.map');
+    Route::patch('/admin/provider-products/{providerProduct}/toggle-status', [ProviderProductController::class, 'toggleStatus'])->name('admin.provider-products.toggle-status')->middleware('quyen:provider_product.update');
+    Route::delete('/admin/provider-products/{providerProduct}', [ProviderProductController::class, 'destroy'])->name('admin.provider-products.destroy')->middleware('quyen:provider_product.delete');
+    Route::post('/admin/provider-products/bulk-delete', [ProviderProductController::class, 'bulkDestroy'])->name('admin.provider-products.bulk-delete')->middleware('quyen:provider_product.delete');
+    Route::post('/admin/provider-products/sync', [ProviderProductController::class, 'syncFromProvider'])->name('admin.provider-products.sync')->middleware('quyen:provider_product.sync');
+    Route::post('/admin/provider-products/auto-map', [ProviderProductController::class, 'autoMap'])->name('admin.provider-products.auto-map')->middleware('quyen:provider_product.map');
 });
 
-// NOTE: Module Ma loi Nha Cung Cap (Provider Error Codes Management)
+// NOTE: Module Ma loi Nha Cung Cap — phân quyền chi tiết
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/provider-error-codes', [ProviderErrorCodeController::class, 'index'])->name('admin.provider-error-codes');
-    Route::post('/admin/provider-error-codes', [ProviderErrorCodeController::class, 'store'])->name('admin.provider-error-codes.store');
-    Route::put('/admin/provider-error-codes/{errorCode}', [ProviderErrorCodeController::class, 'update'])->name('admin.provider-error-codes.update');
-    Route::patch('/admin/provider-error-codes/{errorCode}/toggle-status', [ProviderErrorCodeController::class, 'toggleStatus'])->name('admin.provider-error-codes.toggle-status');
-    Route::delete('/admin/provider-error-codes/{errorCode}', [ProviderErrorCodeController::class, 'destroy'])->name('admin.provider-error-codes.destroy');
-    Route::post('/admin/provider-error-codes/bulk-delete', [ProviderErrorCodeController::class, 'bulkDestroy'])->name('admin.provider-error-codes.bulk-delete');
-    Route::post('/admin/provider-error-codes/seed-defaults', [ProviderErrorCodeController::class, 'seedDefaults'])->name('admin.provider-error-codes.seed-defaults');
+    Route::get('/admin/provider-error-codes', [ProviderErrorCodeController::class, 'index'])->name('admin.provider-error-codes')->middleware('quyen:provider_error_code.view');
+    Route::post('/admin/provider-error-codes', [ProviderErrorCodeController::class, 'store'])->name('admin.provider-error-codes.store')->middleware('quyen:provider_error_code.create');
+    Route::put('/admin/provider-error-codes/{errorCode}', [ProviderErrorCodeController::class, 'update'])->name('admin.provider-error-codes.update')->middleware('quyen:provider_error_code.update');
+    Route::patch('/admin/provider-error-codes/{errorCode}/toggle-status', [ProviderErrorCodeController::class, 'toggleStatus'])->name('admin.provider-error-codes.toggle-status')->middleware('quyen:provider_error_code.update');
+    Route::delete('/admin/provider-error-codes/{errorCode}', [ProviderErrorCodeController::class, 'destroy'])->name('admin.provider-error-codes.destroy')->middleware('quyen:provider_error_code.delete');
+    Route::post('/admin/provider-error-codes/bulk-delete', [ProviderErrorCodeController::class, 'bulkDestroy'])->name('admin.provider-error-codes.bulk-delete')->middleware('quyen:provider_error_code.delete');
+    Route::post('/admin/provider-error-codes/seed-defaults', [ProviderErrorCodeController::class, 'seedDefaults'])->name('admin.provider-error-codes.seed-defaults')->middleware('quyen:provider_error_code.create');
 });
 
-// NOTE: Module Nhat ky hoat dong (Audit Logs)
+// NOTE: Module Nhat ky hoat dong — phân quyền chi tiết
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/audit-logs', [AuditLogController::class, 'index'])->name('admin.audit-logs');
-    Route::get('/admin/audit-logs/export', [AuditLogController::class, 'export'])->name('admin.audit-logs.export');
-    Route::get('/admin/audit-logs/{log}', [AuditLogController::class, 'detail'])->name('admin.audit-logs.detail');
+    Route::get('/admin/audit-logs', [AuditLogController::class, 'index'])->name('admin.audit-logs')->middleware('quyen:audit_log.view');
+    Route::get('/admin/audit-logs/export', [AuditLogController::class, 'export'])->name('admin.audit-logs.export')->middleware('quyen:audit_log.export');
+    Route::get('/admin/audit-logs/{log}', [AuditLogController::class, 'detail'])->name('admin.audit-logs.detail')->middleware('quyen:audit_log.view');
 });
 
-// NOTE: Module Bao tri (Maintenance - Cache & Logs)
+// NOTE: Module Bao tri — phân quyền chi tiết
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/maintenance', [MaintenanceController::class, 'index'])->name('admin.maintenance');
-    Route::post('/admin/maintenance/cache/clear-all', [MaintenanceController::class, 'clearAllCache'])->name('admin.maintenance.cache.clear-all');
-    Route::post('/admin/maintenance/cache/clear/{type}', [MaintenanceController::class, 'clearSpecificCache'])->name('admin.maintenance.cache.clear-type');
-    Route::get('/admin/maintenance/logs/ajax', [MaintenanceController::class, 'getLogs'])->name('admin.maintenance.logs.ajax');
-    Route::get('/admin/maintenance/logs/download', [MaintenanceController::class, 'downloadLogs'])->name('admin.maintenance.logs.download');
+    Route::get('/admin/maintenance', [MaintenanceController::class, 'index'])->name('admin.maintenance')->middleware('quyen:maintenance.view');
+    Route::post('/admin/maintenance/cache/clear-all', [MaintenanceController::class, 'clearAllCache'])->name('admin.maintenance.cache.clear-all')->middleware('quyen:maintenance.clear_cache');
+    Route::post('/admin/maintenance/cache/clear/{type}', [MaintenanceController::class, 'clearSpecificCache'])->name('admin.maintenance.cache.clear-type')->middleware('quyen:maintenance.clear_cache');
+    Route::get('/admin/maintenance/logs/ajax', [MaintenanceController::class, 'getLogs'])->name('admin.maintenance.logs.ajax')->middleware('quyen:maintenance.view');
+    Route::get('/admin/maintenance/logs/download', [MaintenanceController::class, 'downloadLogs'])->name('admin.maintenance.logs.download')->middleware('quyen:maintenance.download_logs');
 });
 
-// NOTE: Module Quản lý Hóa đơn & Giao dịch (CPT Hóa đơn)
+// NOTE: Module Quản lý Hóa đơn — phân quyền chi tiết
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/orders', [OrderController::class, 'index'])->name('admin.orders');
-    Route::get('/admin/orders/export', [OrderController::class, 'exportExcel'])->name('admin.orders.export');
-    Route::get('/admin/orders/{id}', [OrderController::class, 'show'])->name('admin.orders.show');
-    Route::post('/admin/orders/{id}/refund', [OrderController::class, 'refund'])->name('admin.orders.refund');
+    Route::get('/admin/orders', [OrderController::class, 'index'])->name('admin.orders')->middleware('quyen:order.view');
+    Route::get('/admin/orders/export', [OrderController::class, 'exportExcel'])->name('admin.orders.export')->middleware('quyen:order.export');
+    Route::get('/admin/orders/{id}', [OrderController::class, 'show'])->name('admin.orders.show')->middleware('quyen:order.view');
+    Route::post('/admin/orders/{id}/refund', [OrderController::class, 'refund'])->name('admin.orders.refund')->middleware('quyen:order.refund');
 });
 
