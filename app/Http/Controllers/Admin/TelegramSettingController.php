@@ -85,11 +85,24 @@ class TelegramSettingController extends Controller
     {
         $validated = $request->validate([
             'chat_id' => ['required', 'string', 'max:100'],
+            'bot_token' => ['nullable', 'string', 'max:255'],
             'channel_name' => ['nullable', 'string', 'max:50'],
         ]);
 
         $chatId = trim($validated['chat_id']);
+        $botToken = trim((string) ($validated['bot_token'] ?? ''));
         $channelName = $validated['channel_name'] ?? 'Kênh Chung';
+
+        $setting = CauHinhThongBao::layCauHinhTelegram();
+        $token = $botToken ?: ($setting->bot_token ?: config('services.telegram.bot_token'));
+
+        if (!$token) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vui lòng nhập Telegram Bot Token ở ô trên trước khi bấm Test!',
+            ], 422);
+        }
+
         $time = now()->format('d/m/Y H:i:s');
         $operator = auth()->user()?->ten_dang_nhap ?? 'admin';
 
@@ -100,7 +113,7 @@ class TelegramSettingController extends Controller
             . "⏰ <b>Thời gian:</b> {$time}\n"
             . "✅ <i>Hệ thống thông báo Telegram hoạt động hoàn hảo!</i>";
 
-        $success = $this->telegramAlert->sendMessage($chatId, $message);
+        $success = $this->telegramAlert->sendMessage($chatId, $message, $token);
 
         if ($success) {
             return response()->json([
@@ -111,7 +124,7 @@ class TelegramSettingController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => "Không thể gửi tin nhắn. Vui lòng kiểm tra Bot Token và đảm bảo bạn đã bấm /start với Bot hoặc thêm Bot vào Nhóm.",
+            'message' => "Không thể gửi tin nhắn. Vui lòng kiểm tra lại Bot Token, Chat ID và đảm bảo bạn đã bấm /start với Bot hoặc đã thêm Bot vào Nhóm.",
         ], 422);
     }
 }

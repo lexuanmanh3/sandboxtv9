@@ -598,12 +598,21 @@
     }
 
     async function testChatId(inputId, channelName) {
+      const botTokenInput = document.getElementById('bot_token');
+      const botToken = (botTokenInput?.value || '').trim();
+
+      if (!botToken) {
+        showToast('Vui lòng nhập Telegram Bot Token ở ô trên trước khi bấm Test!', 'error');
+        botTokenInput?.focus();
+        return;
+      }
+
       const input = document.getElementById(inputId);
-      const chatId = (input.value || '').trim();
+      const chatId = (input?.value || '').trim();
 
       if (!chatId) {
         showToast('Vui lòng nhập Chat ID vào ô trước khi bấm gửi thử nghiệm.', 'error');
-        input.focus();
+        input?.focus();
         return;
       }
 
@@ -621,6 +630,7 @@
             'Accept': 'application/json'
           },
           body: JSON.stringify({
+            bot_token: botToken,
             chat_id: chatId,
             channel_name: channelName
           })
@@ -631,7 +641,7 @@
         if (response.ok && data.success) {
           showToast(data.message || 'Gửi thử nghiệm thành công!', 'success');
         } else {
-          showToast(data.message || 'Gửi thất bại. Vui lòng kiểm tra lại Token hoặc Chat ID.', 'error');
+          showToast(data.message || 'Không thể gửi tin nhắn. Vui lòng kiểm tra lại Bot Token và Chat ID.', 'error');
         }
       } catch (err) {
         showToast('Lỗi kết nối mạng: ' + err.message, 'error');
