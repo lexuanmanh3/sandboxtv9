@@ -25,6 +25,15 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        //
+        Gate::define('quyen', function ($user, $maQuyen) {
+            if ($user->vai_tro === 'admin' || $user->loai_tai_khoan === 'admin') {
+                return true;
+            }
+            if (is_array($maQuyen)) {
+                return $user->coMotTrongCacQuyen($maQuyen);
+            }
+            $permissions = array_filter(array_map('trim', explode(',', $maQuyen)));
+            return $user->coMotTrongCacQuyen($permissions);
+        });
     }
 }

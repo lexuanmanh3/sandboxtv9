@@ -292,6 +292,11 @@
 @endpush
 
 @section('content')
+  @php
+    $currentUser = auth()->user();
+    $canEdit = $currentUser && ($currentUser->vai_tro === 'admin' || $currentUser->loai_tai_khoan === 'admin' || $currentUser->coQuyen('telegram_setting.update'));
+  @endphp
+
   <section class="account-page">
     <header class="account-header">
       <div>
@@ -359,7 +364,7 @@
             value="{{ old('bot_token', $config->bot_token) }}"
             placeholder="Ví dụ: 7123456789:AAFn_abcXYZ1234567890abcdef"
             autocomplete="off"
-            @cannot('quyen', 'telegram_setting.update') disabled @endcannot
+            {{ $canEdit ? '' : 'disabled' }}
           >
           <span class="tele-hint">Lấy từ <code>@BotFather</code> trên Telegram khi tạo bot mới.</span>
         </div>
@@ -379,7 +384,7 @@
                 name="chat_id_alert"
                 value="{{ old('chat_id_alert', $config->chat_id_alert) }}"
                 placeholder="Ví dụ: -1001234567890"
-                @cannot('quyen', 'telegram_setting.update') disabled @endcannot
+                {{ $canEdit ? '' : 'disabled' }}
               >
               <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_alert', 'Nhóm Lỗi &amp; Kỹ thuật')">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -403,7 +408,7 @@
                 name="chat_id_order"
                 value="{{ old('chat_id_order', $config->chat_id_order) }}"
                 placeholder="Ví dụ: -1001234567891"
-                @cannot('quyen', 'telegram_setting.update') disabled @endcannot
+                {{ $canEdit ? '' : 'disabled' }}
               >
               <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_order', 'Nhóm Đơn hàng Thành công')">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -427,7 +432,7 @@
                 name="chat_id_admin"
                 value="{{ old('chat_id_admin', $config->chat_id_admin) }}"
                 placeholder="Ví dụ: -1001234567892"
-                @cannot('quyen', 'telegram_setting.update') disabled @endcannot
+                {{ $canEdit ? '' : 'disabled' }}
               >
               <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_admin', 'Nhóm Quản trị &amp; Hoàn tiền')">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -452,7 +457,7 @@
           {{-- 1. Đơn hàng thành công --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_thong_bao_don_hang" value="1" {{ old('bat_thong_bao_don_hang', $config->bat_thong_bao_don_hang) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_thong_bao_don_hang" value="1" {{ old('bat_thong_bao_don_hang', $config->bat_thong_bao_don_hang) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -464,7 +469,7 @@
           {{-- 2. Cảnh báo lỗi NCC --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_loi" value="1" {{ old('bat_canh_bao_loi', $config->bat_canh_bao_loi) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_canh_bao_loi" value="1" {{ old('bat_canh_bao_loi', $config->bat_canh_bao_loi) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -476,7 +481,7 @@
           {{-- 3. Xử lý chậm --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_xu_ly_cham" value="1" {{ old('bat_canh_bao_xu_ly_cham', $config->bat_canh_bao_xu_ly_cham) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_canh_bao_xu_ly_cham" value="1" {{ old('bat_canh_bao_xu_ly_cham', $config->bat_canh_bao_xu_ly_cham) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -488,7 +493,7 @@
           {{-- 4. Circuit Breaker --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_circuit_breaker" value="1" {{ old('bat_canh_bao_circuit_breaker', $config->bat_canh_bao_circuit_breaker) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_canh_bao_circuit_breaker" value="1" {{ old('bat_canh_bao_circuit_breaker', $config->bat_canh_bao_circuit_breaker) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -500,7 +505,7 @@
           {{-- 5. Số dư NCC thấp --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_so_du_thap" value="1" {{ old('bat_canh_bao_so_du_thap', $config->bat_canh_bao_so_du_thap) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_canh_bao_so_du_thap" value="1" {{ old('bat_canh_bao_so_du_thap', $config->bat_canh_bao_so_du_thap) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -512,7 +517,7 @@
           {{-- 6. Manual Review --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_manual_review" value="1" {{ old('bat_canh_bao_manual_review', $config->bat_canh_bao_manual_review) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_canh_bao_manual_review" value="1" {{ old('bat_canh_bao_manual_review', $config->bat_canh_bao_manual_review) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -524,7 +529,7 @@
           {{-- 7. Hoàn tiền --}}
           <label class="tele-toggle-item">
             <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_thong_bao_hoan_tien" value="1" {{ old('bat_thong_bao_hoan_tien', $config->bat_thong_bao_hoan_tien) ? 'checked' : '' }} @cannot('quyen', 'telegram_setting.update') disabled @endcannot>
+              <input type="checkbox" name="bat_thong_bao_hoan_tien" value="1" {{ old('bat_thong_bao_hoan_tien', $config->bat_thong_bao_hoan_tien) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
               <span class="tele-slider"></span>
             </span>
             <div class="tele-toggle-info">
@@ -549,7 +554,7 @@
       </section>
 
       {{-- ACTION BUTTONS --}}
-      @can('quyen', 'telegram_setting.update')
+      @if ($canEdit)
         <div style="display: flex; justify-content: flex-end; gap: 12px;">
           <button class="account-btn account-btn--primary" type="submit" style="padding: 10px 24px; font-size: 14.5px;">
             <svg class="account-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -565,7 +570,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <span>Bạn đang ở chế độ xem. Chỉ tài khoản Quản trị viên (Admin) mới có quyền chỉnh sửa cấu hình này.</span>
         </div>
-      @endcan
+      @endif
     </form>
   </section>
 
