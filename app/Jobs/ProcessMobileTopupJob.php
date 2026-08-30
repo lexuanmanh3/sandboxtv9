@@ -152,11 +152,12 @@ class ProcessMobileTopupJob implements ShouldQueue
 
             if ($isFailureForCircuit) {
                 // Gửi cảnh báo giao dịch cho tất cả trường hợp không thành công (ngoại trừ mã lỗi cấu hình bỏ qua)
-                $telegramAlert->alertTransactionFailure($lanGoi, $ketQua->thongBao ?: 'Giao dịch phát sinh phản hồi chưa thành công từ NCC', $mapping->ketNoi);
+                $lanGoiFresh = $lanGoi->fresh() ?: $lanGoi;
+                $telegramAlert->alertTransactionFailure($lanGoiFresh, $ketQua->thongBao ?: 'Giao dịch phát sinh phản hồi chưa thành công từ NCC', $mapping->ketNoi);
 
                 // Kiểm tra xem mã lỗi có thuộc danh sách bỏ qua không
                 $ignoredCodes = array_filter(array_map('trim', explode(',', (string) ($circuitConfig['ma_loi_bo_qua'] ?? ''))));
-                if (!$lanGoi->ma_loi_ncc || !in_array((string) $lanGoi->ma_loi_ncc, $ignoredCodes, true)) {
+                if (!$lanGoiFresh->ma_loi_ncc || !in_array((string) $lanGoiFresh->ma_loi_ncc, $ignoredCodes, true)) {
                     $currentFailures = (int) Cache::get($cacheKey, 0) + 1;
                     Cache::put($cacheKey, $currentFailures, now()->addHours(24));
 
