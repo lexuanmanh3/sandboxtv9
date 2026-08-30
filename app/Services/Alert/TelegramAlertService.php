@@ -89,12 +89,15 @@ final class TelegramAlertService
 
         $nccName = $connection?->nhaCungCap?->ten_ncc ?? 'N/A';
         $time = now()->format('d/m/Y H:i:s');
+        $errCode = ($lanGoi->ma_loi_ncc !== null && $lanGoi->ma_loi_ncc !== '') 
+            ? (string) $lanGoi->ma_loi_ncc 
+            : ($lanGoi->http_status ? "HTTP {$lanGoi->http_status}" : 'N/A');
 
         $message = "⚠️ <b>[CẢNH BÁO LỖI GIAO DỊCH NCC]</b>\n"
             . "🏢 <b>NCC:</b> {$nccName}\n"
             . "🆔 <b>Mã GD Hệ thống:</b> <code>{$lanGoi->partner_ref_id}</code>\n"
             . "📌 <b>Sản phẩm:</b> {$lanGoi->ma_san_pham_ncc}\n"
-            . "❌ <b>Mã lỗi NCC:</b> <code>{$lanGoi->ma_loi_ncc}</code>\n"
+            . "❌ <b>Mã lỗi NCC:</b> <code>{$errCode}</code>\n"
             . "📝 <b>Lý do:</b> {$reason}\n"
             . "⏰ <b>Thời gian:</b> {$time}";
 

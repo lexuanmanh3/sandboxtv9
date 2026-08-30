@@ -121,8 +121,10 @@ final class AppotaPayTopupProvider implements NhaCungCapTopupInterface
     private function normalize(Response $response, bool $charging): KetQuaNhaCungCapDTO
     {
         $data = (array) $response->json();
-        if ($response->serverError() || !$response->successful() && $response->status() === 0) {
-            return new KetQuaNhaCungCapDTO(KetQuaNhaCungCap::UNKNOWN_OR_PENDING, null, 'HTTP không xác định', httpStatus: $response->status(), duLieu: $data);
+        $code = isset($data['errorCode']) ? (string) $data['errorCode'] : ($response->status() ? (string) $response->status() : null);
+
+        if ($response->serverError() || (!$response->successful() && $response->status() === 0)) {
+            return new KetQuaNhaCungCapDTO(KetQuaNhaCungCap::UNKNOWN_OR_PENDING, $code ?: (string) $response->status(), $data['message'] ?? 'HTTP không xác định', httpStatus: $response->status(), duLieu: $data);
         }
 
         $code = isset($data['errorCode']) ? (string) $data['errorCode'] : null;
