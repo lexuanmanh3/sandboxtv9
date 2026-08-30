@@ -77,7 +77,13 @@ final class TelegramAlertService
 
         // Kiểm tra xem mã lỗi có nằm trong danh sách bỏ qua không
         $ignoredCodes = array_filter(array_map('trim', explode(',', (string) ($config['bo_qua_ma_loi_ncc'] ?? ''))));
-        if ($lanGoi->ma_loi_ncc && in_array((string) $lanGoi->ma_loi_ncc, $ignoredCodes, true)) {
+        if ($lanGoi->ma_loi_ncc !== null && in_array((string) $lanGoi->ma_loi_ncc, $ignoredCodes, true)) {
+            return false;
+        }
+
+        // Kiểm tra xem nội dung thông điệp lỗi có nằm trong danh sách bỏ qua không
+        $ignoredMsg = trim((string) ($config['bo_qua_message_ncc'] ?? ''));
+        if ($ignoredMsg !== '' && stripos($reason, $ignoredMsg) !== false) {
             return false;
         }
 
