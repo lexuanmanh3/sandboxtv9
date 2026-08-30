@@ -278,8 +278,10 @@ class ProviderController extends Controller
         if ($conn) {
             \Illuminate\Support\Facades\Cache::forget("circuit_breaker_fails_{$conn->id}");
             \Illuminate\Support\Facades\Cache::forget("circuit_breaker_tripped_{$conn->id}");
+            $conn->update(['trang_thai' => 'hoat_dong']);
+            $provider->update(['trang_thai' => 'hoat_dong']);
         }
-        return back()->with('success', "Đã đặt lại (reset) bộ đếm lỗi Circuit Breaker cho nhà cung cấp {$provider->ten_ncc}.");
+        return back()->with('success', "Đã đặt lại (reset) bộ đếm lỗi Circuit Breaker và mở lại kết nối cho nhà cung cấp {$provider->ten_ncc}.");
     }
 
     /**
