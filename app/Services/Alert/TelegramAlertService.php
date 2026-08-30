@@ -170,4 +170,79 @@ final class TelegramAlertService
 
         return $this->sendMessage($chatId, $message);
     }
+
+    /**
+     * Thông báo đơn nạp tiền điện thoại thành công.
+     */
+    public function alertOrderSuccess(\App\Models\DonHang $donHang, ?LanGoiNhaCungCap $lanGoi = null): bool
+    {
+        $chatId = config('services.telegram.channel_order') ?: config('services.telegram.channel_alert');
+        if (!$chatId) {
+            return false;
+        }
+
+        $time = now()->format('d/m/Y H:i:s');
+        $menhGia = number_format((float) $donHang->menh_gia, 0, ',', '.') . 'đ';
+        $giaBan = number_format((float) $donHang->gia_ban, 0, ',', '.') . 'đ';
+        $nccName = $donHang->nhaCungCapThanhCong?->ten_ncc ?? $lanGoi?->nhaCungCap?->ten_ncc ?? 'N/A';
+        $phoneChe = substr((string) $donHang->tai_khoan_nhan, 0, 4) . '***' . substr((string) $donHang->tai_khoan_nhan, -3);
+
+        $message = "🎉 <b>[ĐƠN HÀNG THÀNH CÔNG]</b>\n"
+            . "🆔 <b>Mã đơn:</b> <code>{$donHang->ma_don_hang}</code>\n"
+            . "📱 <b>Số nạp:</b> <code>{$phoneChe}</code> (" . strtoupper($donHang->nha_mang_thuc_te ?: $donHang->nha_mang_yeu_cau ?: '') . ")\n"
+            . "💵 <b>Mệnh giá:</b> {$menhGia} | <b>Giá bán:</b> <b>{$giaBan}</b>\n"
+            . "🏢 <b>NCC xử lý:</b> {$nccName}\n"
+            . "👤 <b>Khách hàng:</b> " . ($donHang->nguoiDung?->ten_dang_nhap ?? 'Khách lẻ') . "\n"
+            . "⏰ <b>Thời gian:</b> {$time}";
+
+        return $this->sendMessage($chatId, $message);
+    }
+
+    /**
+     * Cảnh báo đơn hàng rơi vào trạng thái chờ đối soát thủ công (MANUAL_REVIEW).
+     */
+    public function alertManualReview(\App\Models\DonHang $donHang, string $reason): bool
+    {
+        $chatId = config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        if (!$chatId) {
+            return false;
+        }
+
+        $time = now()->format('d/m/Y H:i:s');
+        $giaBan = number_format((float) $donHang->gia_ban, 0, ',', '.') . 'đ';
+
+        $message = "🟡 <b>[ĐƠN HÀNG CẦN ĐỐI SOÁT THỦ CÔNG]</b>\n"
+            . "🆔 <b>Mã đơn:</b> <code>{$donHang->ma_don_hang}</code>\n"
+            . "📱 <b>Số nạp:</b> <code>{$donHang->tai_khoan_nhan}</code>\n"
+            . "💵 <b>Giá bán:</b> {$giaBan}\n"
+            . "⚠️ <b>Lý do:</b> {$reason}\n"
+            . "👉 <b>Khuyến nghị:</b> Admin vui lòng vào hệ thống kiểm tra trạng thái bên NCC và bấm Hoàn tiền hoặc Hoàn tất thủ công.\n"
+            . "⏰ <b>Thời gian:</b> {$time}";
+
+        return $this->sendMessage($chatId, $message);
+    }
+
+    /**
+     * Thông báo khi admin hoàn tiền thủ công cho đơn hàng.
+     */
+    public function alertOrderRefunded(\App\Models\DonHang $donHang, string $reason, string $operator): bool
+    {
+        $chatId = config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        if (!$chatId) {
+            return false;
+        }
+
+        $time = now()->format('d/m/Y H:i:s');
+        $soTien = number_format((float) $donHang->gia_ban, 0, ',', '.') . 'đ';
+
+        $message = "🔄 <b>[HOÀN TIỀN ĐƠN HÀNG]</b>\n"
+            . "🆔 <b>Mã đơn:</b> <code>{$donHang->ma_don_hang}</code>\n"
+            . "👤 <b>Người nhận hoàn:</b> " . ($donHang->nguoiDung?->ten_dang_nhap ?? 'N/A') . "\n"
+            . "💰 <b>Số tiền hoàn:</b> <b>{$soTien}</b>\n"
+            . "📝 <b>Lý do:</b> {$reason}\n"
+            . "👮 <b>Người thực hiện:</b> {$operator}\n"
+            . "⏰ <b>Thời gian:</b> {$time}";
+
+        return $this->sendMessage($chatId, $message);
+    }
 }

@@ -31,4 +31,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_ALERT_BOT_TOKEN', env('TELEGRAM_BOT_TOKEN')),
+        'channel_alert' => env('TELEGRAM_ALERT_CHAT_ID'),
+        'channel_order' => env('TELEGRAM_ORDER_CHAT_ID', env('TELEGRAM_ALERT_CHAT_ID')),
+        'channel_admin' => env('TELEGRAM_ADMIN_CHAT_ID', env('TELEGRAM_ALERT_CHAT_ID')),
+    ],
+
 ];
+

@@ -269,6 +269,13 @@ class OrderController extends Controller
                     'trang_thai_thanh_toan' => 'REFUNDED',
                     'thong_bao_loi_he_thong' => $reason,
                 ]);
+
+                // Gửi thông báo Telegram về nhóm Admin/Kế toán
+                app(\App\Services\Alert\TelegramAlertService::class)->alertOrderRefunded(
+                    $donHang,
+                    $reason,
+                    $adminName
+                );
             });
         } catch (\RuntimeException $e) {
             return back()->withErrors(['refund' => $e->getMessage()]);

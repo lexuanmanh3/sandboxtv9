@@ -74,6 +74,7 @@ class CheckMobileTopupStatusJob implements ShouldQueue
                     'lan_goi_thanh_cong_id' => $call->id,
                     'hoan_thanh_luc' => now()
                 ]);
+                $telegramAlert->alertOrderSuccess($order->fresh(), $call);
             } elseif ($result->ketQua === KetQuaNhaCungCap::DEFINITIVE_FAILURE && strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
                 $state->chuyen($order, TrangThaiDonHang::FAILED, 'Kiểm tra trạng thái xác nhận thất bại cuối');
                 $order->update(['that_bai_luc' => now()]);
@@ -95,7 +96,7 @@ class CheckMobileTopupStatusJob implements ShouldQueue
 
         if ($result->ketQua === KetQuaNhaCungCap::UNKNOWN_OR_PENDING) {
             if ($this->attempts() >= $maxAttempts) {
-                DB::transaction(function () use ($lanGoi, $state, $viService, $actionOnTimeout, $maxAttempts) {
+                DB::transaction(function () use ($lanGoi, $state, $viService, $actionOnTimeout, $maxAttempts, $telegramAlert) {
                     $order = DonHang::query()->lockForUpdate()->findOrFail($lanGoi->don_hang_id);
                     if (strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
                         if ($actionOnTimeout === 'TU_DONG_HOAN_TIEN') {
@@ -115,6 +116,7 @@ class CheckMobileTopupStatusJob implements ShouldQueue
                             }
                         } else {
                             $state->chuyen($order, TrangThaiDonHang::MANUAL_REVIEW, "Hết {$maxAttempts} lần kiểm tra nhưng kết quả vẫn chưa xác định, chuyển Admin duyệt");
+                            $telegramAlert->alertManualReview($order->fresh(), "Hết {$maxAttempts} lần kiểm tra nhưng kết quả vẫn chưa xác định, chuyển Admin đối soát");
                         }
                     }
                 });

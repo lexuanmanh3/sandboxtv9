@@ -143,6 +143,7 @@ class ProcessMobileTopupJob implements ShouldQueue
             if ($ketQua->ketQua === KetQuaNhaCungCap::SUCCESS) {
                 // Reset bộ đếm lỗi liên tiếp khi giao dịch thành công
                 Cache::forget($cacheKey);
+                $telegramAlert->alertOrderSuccess($donHang->fresh(), $lanGoi);
                 return;
             }
 
