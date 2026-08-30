@@ -207,6 +207,11 @@ class ProviderController extends Controller
             }
 
             $connection->fill($connectionData)->save();
+
+            if (($validated['trang_thai'] ?? '') === 'hoat_dong') {
+                \Illuminate\Support\Facades\Cache::forget("circuit_breaker_fails_{$connection->id}");
+                \Illuminate\Support\Facades\Cache::forget("circuit_breaker_tripped_{$connection->id}");
+            }
         });
 
         return back()->with('success', 'Cập nhật cấu hình nhà cung cấp thành công.');
@@ -222,6 +227,10 @@ class ProviderController extends Controller
         DB::transaction(function () use ($provider, $newStatus) {
             $provider->update(['trang_thai' => $newStatus]);
             $provider->ketNoi()->update(['trang_thai' => $newStatus]);
+            foreach ($provider->ketNoi as $conn) {
+                \Illuminate\Support\Facades\Cache::forget("circuit_breaker_fails_{$conn->id}");
+                \Illuminate\Support\Facades\Cache::forget("circuit_breaker_tripped_{$conn->id}");
+            }
         });
 
         $statusLabel = $newStatus === 'hoat_dong' ? 'Hoạt động' : 'Tạm dừng';
