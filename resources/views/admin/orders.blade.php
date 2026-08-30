@@ -454,11 +454,6 @@
                   <span class="account-status-pill {{ $statusClass }}">
                     {{ $statusLabel }}
                   </span>
-                  @if ($order->trang_thai_thanh_toan)
-                    <div style="font-size: 11px; margin-top: 3px; color: #64748b;">
-                      TT: {{ $order->trang_thai_thanh_toan }}
-                    </div>
-                  @endif
                 </td>
               </tr>
             @empty
@@ -570,13 +565,9 @@
           3. Trạng thái &amp; Nhà cung cấp định tuyến
         </h3>
         <div class="detail-grid">
-          <div class="detail-item">
+          <div class="detail-item" style="grid-column: span 2;">
             <span class="detail-item__label">Trạng thái đơn hàng</span>
             <span class="detail-item__value" id="dTrangThaiDon">-</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-item__label">Trạng thái thanh toán</span>
-            <span class="detail-item__value" id="dTrangThaiThanhToan">-</span>
           </div>
           <div class="detail-item">
             <span class="detail-item__label">Nhà cung cấp thực hiện</span>
@@ -700,8 +691,18 @@
             document.getElementById('dChietKhau').textContent = (o.chiet_khau > 0 ? `-${o.chiet_khau}%` : '0%');
             document.getElementById('dLoiNhuan').textContent = `Vốn: ${Number(o.gia_von_thuc_te || o.gia_von || 0).toLocaleString('vi-VN')}đ | Lãi: +${Number(o.loi_nhuan || 0).toLocaleString('vi-VN')}đ`;
 
-            document.getElementById('dTrangThaiDon').textContent = o.trang_thai_don_hang;
-            document.getElementById('dTrangThaiThanhToan').textContent = o.trang_thai_thanh_toan || '-';
+            const statusMap = {
+              'SUCCESS': { label: 'Thành công', bg: '#dcfce7', color: '#15803d', border: '#bbf7d0' },
+              'FAILED': { label: 'Thất bại', bg: '#fee2e2', color: '#b91c1c', border: '#fecaca' },
+              'REFUNDED': { label: 'Đã hoàn tiền', bg: '#f3e8ff', color: '#7e22ce', border: '#e9d5ff' },
+              'PROCESSING': { label: 'Đang nạp tiền', bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
+              'PROVIDER_PENDING': { label: 'Chờ NCC xử lý (PENDING)', bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
+              'MANUAL_REVIEW': { label: 'Chờ đối soát thủ công', bg: '#fee2e2', color: '#b91c1c', border: '#fecaca' },
+              'PAID': { label: 'Đã thanh toán', bg: '#e0f2fe', color: '#0369a1', border: '#bae6fd' },
+              'WAITING_PAYMENT': { label: 'Chờ thanh toán', bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' },
+            };
+            const st = statusMap[o.trang_thai_don_hang] || { label: o.trang_thai_don_hang, bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+            document.getElementById('dTrangThaiDon').innerHTML = `<span style="background:${st.bg}; color:${st.color}; border:1px solid ${st.border}; padding:4px 12px; border-radius:6px; font-weight:700; font-size:13px; display:inline-block;">${st.label}</span>`;
             document.getElementById('dNCC').textContent = o.nha_cung_cap_thanh_cong?.ten_ncc || o.nha_cung_cap?.ten_ncc || '-';
             document.getElementById('dMaDoiTac').textContent = o.ma_don_doi_tac || '-';
 
