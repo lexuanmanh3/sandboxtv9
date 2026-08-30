@@ -34,7 +34,7 @@ class ProviderController extends Controller
 
         $circuitStats = [];
         foreach ($providers as $p) {
-            $conn = $p->ketNoi;
+            $conn = $p->ketNoi->first();
             if ($conn) {
                 $cacheKey = "circuit_breaker_fails_{$conn->id}";
                 $circuitStats[$p->id] = (int) \Illuminate\Support\Facades\Cache::get($cacheKey, 0);
