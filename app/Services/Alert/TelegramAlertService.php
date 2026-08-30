@@ -88,6 +88,8 @@ final class TelegramAlertService
         }
 
         $nccName = $connection?->nhaCungCap?->ten_ncc ?? 'N/A';
+        $maDonHang = $lanGoi->donHang?->ma_don_hang ?? 'N/A';
+        $soNhan = $lanGoi->donHang?->tai_khoan_nhan ?? 'N/A';
         $time = now()->format('d/m/Y H:i:s');
         $errCode = ($lanGoi->ma_loi_ncc !== null && $lanGoi->ma_loi_ncc !== '') 
             ? (string) $lanGoi->ma_loi_ncc 
@@ -95,6 +97,8 @@ final class TelegramAlertService
 
         $message = "⚠️ <b>[CẢNH BÁO LỖI GIAO DỊCH NCC]</b>\n"
             . "🏢 <b>NCC:</b> {$nccName}\n"
+            . "🧾 <b>Mã Hóa đơn:</b> <code>{$maDonHang}</code>\n"
+            . "📱 <b>Số nạp:</b> <code>{$soNhan}</code>\n"
             . "🆔 <b>Mã GD Hệ thống:</b> <code>{$lanGoi->partner_ref_id}</code>\n"
             . "📌 <b>Sản phẩm:</b> {$lanGoi->ma_san_pham_ncc}\n"
             . "❌ <b>Mã lỗi NCC:</b> <code>{$errCode}</code>\n"
@@ -127,12 +131,16 @@ final class TelegramAlertService
         }
 
         $nccName = $connection?->nhaCungCap?->ten_ncc ?? 'N/A';
+        $maDonHang = $lanGoi->donHang?->ma_don_hang ?? 'N/A';
+        $soNhan = $lanGoi->donHang?->tai_khoan_nhan ?? 'N/A';
         $durationFormatted = number_format($durationSeconds, 2);
         $time = now()->format('d/m/Y H:i:s');
 
         $message = "🐢 <b>[CẢNH BÁO XỬ LÝ GIAO DỊCH CHẬM]</b>\n"
             . "🏢 <b>NCC:</b> {$nccName}\n"
-            . "🆔 <b>Mã GD:</b> <code>{$lanGoi->partner_ref_id}</code>\n"
+            . "🧾 <b>Mã Hóa đơn:</b> <code>{$maDonHang}</code>\n"
+            . "📱 <b>Số nạp:</b> <code>{$soNhan}</code>\n"
+            . "🆔 <b>Mã GD Hệ thống:</b> <code>{$lanGoi->partner_ref_id}</code>\n"
             . "⏱️ <b>Thời gian xử lý:</b> <b>{$durationFormatted}s</b> (Ngưỡng cảnh báo: {$thresholdSeconds}s)\n"
             . "📌 <b>Sản phẩm:</b> {$lanGoi->ma_san_pham_ncc}\n"
             . "⏰ <b>Thời gian:</b> {$time}";
