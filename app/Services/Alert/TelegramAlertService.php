@@ -58,20 +58,19 @@ final class TelegramAlertService
      */
     public function alertTransactionFailure(LanGoiNhaCungCap $lanGoi, string $reason, ?KetNoiNhaCungCap $connection = null): bool
     {
-        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
-        if (!$dbConfig->bat_canh_bao_loi) {
-            return false;
-        }
-
         $connection ??= $lanGoi->ketNoi;
         $config = $connection?->cau_hinh_canh_bao_loi ?? [];
 
-        // Kiểm tra xem NCC có tắt riêng không (nếu có cấu hình riêng ở NCC)
-        if (isset($config['bat_canh_bao']) && !$config['bat_canh_bao']) {
+        // Kiểm tra xem NCC này có bật cảnh báo không (cài đặt độc lập theo từng NCC)
+        if (empty($config['bat_canh_bao'])) {
             return false;
         }
 
-        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->layChatIdChoSuKien('transaction_failure');
+        $chatId = $config['nhom_canh_bao_chat_id'] ?? null;
+        if (!$chatId) {
+            $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+            $chatId = $dbConfig->layChatIdChoSuKien('transaction_failure');
+        }
         if (!$chatId) {
             return false;
         }

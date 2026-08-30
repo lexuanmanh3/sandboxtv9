@@ -502,26 +502,6 @@
             </div>
           </div>
 
-          {{-- 2. Lỗi giao dịch NCC --}}
-          <div class="tele-event-card">
-            <div class="tele-event-card__top">
-              <label class="tele-toggle-switch">
-                <input type="checkbox" name="bat_canh_bao_loi" value="1" {{ old('bat_canh_bao_loi', $config->bat_canh_bao_loi) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-                <span class="tele-slider"></span>
-              </label>
-              <div class="tele-event-info">
-                <strong>⚠️ Lỗi giao dịch nhà cung cấp</strong>
-                <span>Cảnh báo khi NCC trả về mã lỗi thất bại dứt khoát hoặc từ chối nạp thẻ.</span>
-              </div>
-            </div>
-            <div class="tele-event-channel-picker">
-              <label for="event_transaction_failure">Nhóm nhận cảnh báo đơn lỗi:</label>
-              <select class="tele-select event-channel-select" id="event_transaction_failure" name="cau_hinh_kenh_su_kien[transaction_failure]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['transaction_failure'] ?? ($config->chat_id_alert ?? '') }}">
-                {{-- Populated by JS --}}
-              </select>
-            </div>
-          </div>
-
           {{-- 3. Xử lý chậm --}}
           <div class="tele-event-card">
             <div class="tele-event-card__top">
