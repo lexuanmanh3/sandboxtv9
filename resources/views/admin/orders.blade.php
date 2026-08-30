@@ -403,9 +403,12 @@
                   {{ optional($order->created_at)->format('d/m/Y H:i:s') }}
                 </td>
                 <td>
-                  <strong>{{ $order->nguoiDung?->name ?? $order->nguoiDung?->username ?? 'Khách vãng lai' }}</strong>
+                  <strong>{{ $order->nguoiDung?->ten_dang_nhap ?: ($order->nguoiDung?->name ?: 'Khách vãng lai') }}</strong>
+                  @if ($order->nguoiDung && $order->nguoiDung->name && $order->nguoiDung->name !== $order->nguoiDung->ten_dang_nhap)
+                    <div style="font-size: 11px; color: #64748b;">{{ $order->nguoiDung->name }}</div>
+                  @endif
                   @if ($order->nguon_don)
-                    <div style="font-size: 11px; color: #64748b;">Nguồn: {{ strtoupper($order->nguon_don) }}</div>
+                    <div style="font-size: 11px; color: #0284c7; font-weight: 600;">Nguồn: {{ strtoupper($order->nguon_don) }}</div>
                   @endif
                 </td>
                 <td>
@@ -681,7 +684,7 @@
             document.getElementById('detailOrderCode').textContent = o.ma_don_hang;
             document.getElementById('dMaDon').textContent = o.ma_don_hang;
             document.getElementById('dCreatedAt').textContent = o.created_at ? new Date(o.created_at).toLocaleString('vi-VN') : '-';
-            document.getElementById('dNguoiDung').textContent = (o.nguoi_dung ? (o.nguoi_dung.name || o.nguoi_dung.username) : 'Khách vãng lai');
+            document.getElementById('dNguoiDung').textContent = (o.nguoi_dung ? (o.nguoi_dung.ten_dang_nhap || o.nguoi_dung.name || o.nguoi_dung.username) : 'Khách vãng lai');
             document.getElementById('dTaiKhoanNhan').textContent = o.tai_khoan_nhan || '-';
             document.getElementById('dDichVu').textContent = `${o.dich_vu?.ten_dich_vu || '-'} / ${o.loai_san_pham?.ten_loai_san_pham || '-'}`;
             document.getElementById('dTenSanPham').textContent = o.ten_san_pham_snapshot || o.san_pham?.ten_san_pham || '-';

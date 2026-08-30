@@ -9,11 +9,13 @@ use App\Models\SanPham;
 use App\Models\User;
 use App\Models\ViNguoiDung;
 use App\Services\Topup\ViNguoiDungService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class TopupOrderTest extends TestCase
 {
+    use DatabaseTransactions;
+
     protected User $user;
     protected LoaiSanPham $category;
     protected SanPham $product;
