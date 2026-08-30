@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sandbox</title>
+  <title>@yield('title', 'VietFin - Cổng thanh toán viễn thông')</title>
   <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
   <link rel="stylesheet" href="{{ asset('frontend/css/home.css') }}">
   <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
+  @stack('styles')
 </head>
 <body>
   <x-icon-sprite />
@@ -15,6 +16,7 @@
     $currentUser = auth()->user();
     $canAccessFrontendHome = $currentUser?->coQuyen('frontend.home.access');
     $canAccessFrontendTopup = $currentUser?->coQuyen('frontend.topup.access');
+    $canAccessAdmin = $currentUser?->isAdmin() || $currentUser?->coMotTrongCacQuyen(['account.view', 'role.view', 'service_config.access']);
   @endphp
 
   <header class="site-header">
@@ -35,6 +37,9 @@
         @if ($canAccessFrontendTopup)
           <a class="nav-link {{ request()->routeIs('frontend.topup') ? 'active' : '' }}" href="{{ route('frontend.topup') }}">NẠP TIỀN ĐIỆN THOẠI</a>
         @endif
+        <a class="nav-link" href="#">MUA MÃ THẺ</a>
+        <a class="nav-link" href="#">THANH TOÁN HÓA ĐƠN</a>
+        <a class="nav-link" href="#">TOPUP DATA</a>
       </div>
 
       <button class="icon-btn" type="button" aria-label="Thông báo">
@@ -57,12 +62,20 @@
           <div class="dropdown-header">
             <x-icon name="account_circle" class="dropdown-header__icon" />
             <div>
-              <strong>{{ auth()->user()->ten_hien_thi }}</strong>
-              <span>{{ auth()->user()->ten_dang_nhap }}</span>
+              <strong>{{ auth()->user()->ten_hien_thi ?? auth()->user()->name ?? 'Người dùng' }}</strong>
+              <span>{{ auth()->user()->ten_dang_nhap ?? auth()->user()->email ?? 'user' }}</span>
             </div>
           </div>
 
           <hr class="dropdown-divider" />
+
+          @if ($canAccessAdmin)
+            <a href="{{ route('admin.dashboard') }}" class="dropdown-item" role="menuitem" style="color: #0284c7; font-weight: 600;">
+              <x-icon name="sync_alt" />
+              Trang Quản trị (Admin)
+            </a>
+            <hr class="dropdown-divider" />
+          @endif
 
           <a href="#" class="dropdown-item" role="menuitem">
             <x-icon name="person" />
@@ -89,23 +102,25 @@
     </nav>
   </header>
 
-  <section class="hero">
-    <div class="hero-bg"></div>
-    <div class="hero-overlay"></div>
+  @if(request()->routeIs('frontend.home'))
+    <section class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-overlay"></div>
 
-    <div class="hero-content container">
-      <div class="hero-title">
-        <x-icon name="home" class="hero-icon" />
-        <h1>WELCOME</h1>
-      </div>
+      <div class="hero-content container">
+        <div class="hero-title">
+          <x-icon name="home" class="hero-icon" />
+          <h1>WELCOME</h1>
+        </div>
 
-      <div class="balance-card">
-        <p>Mã ĐL: <strong>A6844870</strong></p>
-        <p>Số dư: <strong>55.630.069.900đ</strong></p>
-        <button class="outline-btn" type="button">NẠP TIỀN TÀI KHOẢN</button>
+        <div class="balance-card">
+          <p>Mã ĐL: <strong>A6844870</strong></p>
+          <p>Số dư: <strong>55.630.069.900đ</strong></p>
+          <button class="outline-btn" type="button">NẠP TIỀN TÀI KHOẢN</button>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  @endif
 
   @yield('content')
 
@@ -134,5 +149,6 @@
   </form>
 
   <script src="{{ asset('frontend/js/home.js') }}"></script>
+  @stack('scripts')
 </body>
 </html>

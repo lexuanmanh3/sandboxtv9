@@ -27,11 +27,13 @@ class CategoryController extends Controller
     {
         $query = $this->buildCategoryQuery($request);
 
+        $perPage = in_array((int) $request->query('per_page'), [10, 20, 50, 100], true) ? (int) $request->query('per_page') : 10;
+
         // NOTE: Eager-load dichVu va loaiCha de tranh N+1 khi render ten dich vu/loai cha tren bang.
         $categories = $query->with(['dichVu', 'loaiCha'])
             ->orderBy('thu_tu')
             ->orderBy('ten_loai_san_pham')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         return view('admin.categories', [
@@ -78,6 +80,19 @@ class CategoryController extends Controller
         $validated = $request->validated();
         $validated['thu_tu'] = $validated['thu_tu'] ?? 0;
 
+        if ($request->hasFile('hinh_anh_file')) {
+            $file = $request->file('hinh_anh_file');
+            $fileName = 'category_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $destinationPath = public_path('uploads/categories');
+            if (! file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            $file->move($destinationPath, $fileName);
+            $validated['hinh_anh'] = '/uploads/categories/' . $fileName;
+        }
+
+        unset($validated['hinh_anh_file']);
+
         LoaiSanPham::create($validated);
 
         return redirect()->route('admin.categories')->with('success', 'Tạo loại sản phẩm thành công.');
@@ -90,6 +105,19 @@ class CategoryController extends Controller
     {
         $validated = $request->validated();
         $validated['thu_tu'] = $validated['thu_tu'] ?? 0;
+
+        if ($request->hasFile('hinh_anh_file')) {
+            $file = $request->file('hinh_anh_file');
+            $fileName = 'category_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $destinationPath = public_path('uploads/categories');
+            if (! file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            $file->move($destinationPath, $fileName);
+            $validated['hinh_anh'] = '/uploads/categories/' . $fileName;
+        }
+
+        unset($validated['hinh_anh_file']);
 
         $category->update($validated);
 
@@ -115,6 +143,40 @@ class CategoryController extends Controller
         }
 
         return back()->with('success', 'Xóa loại sản phẩm thành công.');
+    }
+
+    /**
+     * Xóa nhiều loại sản phẩm cùng lúc.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:loai_san_pham,id'],
+        ]);
+
+        $ids = $validated['ids'];
+        $deleted = 0;
+        $failed = 0;
+
+        foreach ($ids as $id) {
+            try {
+                $category = LoaiSanPham::find($id);
+                if ($category) {
+                    $category->delete();
+                    $deleted++;
+                }
+            } catch (Throwable $e) {
+                report($e);
+                $failed++;
+            }
+        }
+
+        if ($failed > 0) {
+            return back()->with('success', "Đã xóa thành công {$deleted} loại sản phẩm. ({$failed} loại sản phẩm không thể xóa do đang có sản phẩm/loại con liên kết).");
+        }
+
+        return back()->with('success', "Đã xóa thành công {$deleted} loại sản phẩm đã chọn.");
     }
 
     /**

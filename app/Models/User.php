@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\VaiTro;
 use App\Models\Quyen;
+use App\Services\Authorization\AuthorizationService;
 
 class User extends Authenticatable
 {
@@ -170,7 +171,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Sau này khi làm bảng vai_tro, mình sẽ dùng quan hệ này.
+     * Quan hệ bảng vai_tro.
      *
      * 1 user có thể có nhiều vai trò.
      */
@@ -183,12 +184,25 @@ class User extends Authenticatable
             'vai_tro_id'
         );
     }
-        // Kiểm tra người dùng có vai trò theo mã vai trò không
+
+    /**
+     * Ví tiền của người dùng.
+     */
+    public function vi()
+    {
+        return $this->hasOne(ViNguoiDung::class, 'nguoi_dung_id');
+    }
+
     public function coVaiTro(string $maVaiTro): bool
     {
         return $this->vaiTro()
             ->where('ma_vai_tro', $maVaiTro)
             ->exists();
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->coVaiTro('admin') || $this->coVaiTro('quan_tri_vien') || $this->ten_dang_nhap === 'admin';
     }
 
     /**
@@ -200,13 +214,7 @@ class User extends Authenticatable
      */
     public function coQuyen(string $maQuyen): bool
     {
-        return $this->vaiTro()
-            ->where('vai_tro.trang_thai', 'hoat_dong')
-            ->whereHas('quyen', function ($query) use ($maQuyen) {
-                $query->where('ma_quyen', $maQuyen)
-                    ->where('quyen.trang_thai', 'hoat_dong');
-            })
-            ->exists();
+        return app(AuthorizationService::class)->allows($this, $maQuyen);
     }
 
     /**
@@ -215,32 +223,11 @@ class User extends Authenticatable
      */
     public function coMotTrongCacQuyen(array $maQuyen): bool
     {
-        return $this->vaiTro()
-            ->where('vai_tro.trang_thai', 'hoat_dong')
-            ->whereHas('quyen', function ($query) use ($maQuyen) {
-                $query->whereIn('ma_quyen', $maQuyen)
-                    ->where('quyen.trang_thai', 'hoat_dong');
-            })
-            ->exists();
+        return app(AuthorizationService::class)->allowsAny($this, $maQuyen);
     }
 
-    // /**
-    //  * Sau này khi làm bảng dai_ly, 1 user có thể gắn với 1 đại lý.
-    //  */
-    // public function daiLy()
-    // {
-    //     return $this->hasOne(DaiLy::class, 'user_id');
-    // }
-
-    // /**
-    //  * Sau này khi làm bảng dai_ly_api, 1 user có thể gắn với 1 đại lý API.
-    //  */
-    // public function daiLyApi()
-    // {
-    //     return $this->hasOne(DaiLyApi::class, 'user_id');
-    // }
-
-    // Các vai trò của người dùng
-
-
+    public function maQuyenHieuLuc(): \Illuminate\Support\Collection
+    {
+        return app(AuthorizationService::class)->codes($this);
+    }
 }

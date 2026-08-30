@@ -51,12 +51,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  document.addEventListener("click", () => {
+  function closeAllRowMenus() {
     document.querySelectorAll(".account-row-actions.is-open").forEach((wrapper) => {
       wrapper.classList.remove("is-open");
       wrapper.querySelector(".account-row-menu")?.setAttribute("hidden", "");
     });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".account-row-actions")) {
+      closeAllRowMenus();
+    }
   });
+
+  window.addEventListener("scroll", closeAllRowMenus, { passive: true, capture: true });
+  document.addEventListener("scroll", closeAllRowMenus, { passive: true, capture: true });
+  window.addEventListener("resize", closeAllRowMenus, { passive: true });
 
   const serviceModal = document.querySelector('[data-service-modal="form"]');
   const deleteModal = document.querySelector('[data-service-modal="delete"]');
@@ -204,8 +214,68 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" || event.key === "Esc") {
       closeModals();
+      document.querySelectorAll(".account-row-actions.is-open").forEach((wrapper) => {
+        wrapper.classList.remove("is-open");
+        wrapper.querySelector(".account-row-menu")?.setAttribute("hidden", "");
+      });
     }
+  });
+
+  // Xử lý Checkbox Chọn nhiều & Thanh tác vụ nổi (Bulk Action Bar)
+  const selectAllCheckbox = document.querySelector("[data-select-all]");
+  const itemCheckboxes = document.querySelectorAll(".bulk-item-checkbox");
+  const bulkActionBar = document.getElementById("bulkActionBar");
+  const bulkSelectedCount = document.getElementById("bulkSelectedCount");
+  const bulkDeselectBtn = document.getElementById("bulkDeselectBtn");
+  const bulkDeleteBtn = document.getElementById("bulkDeleteBtn");
+  const bulkDeleteHiddenInputs = document.getElementById("bulkServiceDeleteHiddenInputs");
+  const bulkDeleteConfirmCount = document.getElementById("bulkServiceDeleteConfirmCount");
+  const bulkDeleteModal = document.querySelector('[data-service-modal="bulk-delete"]');
+
+  function updateBulkBar() {
+    const checked = [...itemCheckboxes].filter(cb => cb.checked);
+    const count = checked.length;
+
+    if (bulkSelectedCount) bulkSelectedCount.textContent = count;
+    if (bulkDeleteConfirmCount) bulkDeleteConfirmCount.textContent = count;
+
+    if (count > 0) {
+      bulkActionBar?.classList.add("is-visible");
+    } else {
+      bulkActionBar?.classList.remove("is-visible");
+    }
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = count > 0 && count === itemCheckboxes.length;
+      selectAllCheckbox.indeterminate = count > 0 && count < itemCheckboxes.length;
+    }
+  }
+
+  selectAllCheckbox?.addEventListener("change", (e) => {
+    itemCheckboxes.forEach(cb => cb.checked = e.target.checked);
+    updateBulkBar();
+  });
+
+  itemCheckboxes.forEach(cb => {
+    cb.addEventListener("change", updateBulkBar);
+    cb.addEventListener("click", (e) => e.stopPropagation());
+  });
+
+  bulkDeselectBtn?.addEventListener("click", () => {
+    itemCheckboxes.forEach(cb => cb.checked = false);
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    updateBulkBar();
+  });
+
+  bulkDeleteBtn?.addEventListener("click", () => {
+    const checked = [...itemCheckboxes].filter(cb => cb.checked);
+    if (checked.length === 0) return;
+
+    if (bulkDeleteHiddenInputs) {
+      bulkDeleteHiddenInputs.innerHTML = checked.map(cb => `<input type="hidden" name="ids[]" value="${cb.value}">`).join('');
+    }
+    openModal(bulkDeleteModal);
   });
 });

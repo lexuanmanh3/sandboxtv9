@@ -43,6 +43,10 @@ class DonHang extends Model
         'trang_thai_doi_soat',
         'ma_loi_he_thong',
         'thong_bao_loi_he_thong',
+        'nha_mang_yeu_cau', 'nha_mang_thuc_te', 'loai_thue_bao_yeu_cau', 'loai_thue_bao_thuc_te',
+        'ma_san_pham_snapshot', 'ten_san_pham_snapshot', 'menh_gia_snapshot', 'gia_ban_snapshot',
+        'gia_von_thuc_te', 'nha_cung_cap_thanh_cong_id', 'lan_goi_thanh_cong_id',
+        'thanh_toan_luc', 'bat_dau_xu_ly_luc', 'hoan_thanh_luc', 'that_bai_luc',
     ];
 
     /**
@@ -55,7 +59,22 @@ class DonHang extends Model
         'gia_von' => 'decimal:2',
         'chiet_khau' => 'decimal:2',
         'loi_nhuan' => 'decimal:2',
+        'menh_gia_snapshot' => 'decimal:2',
+        'gia_ban_snapshot' => 'decimal:2',
+        'gia_von_thuc_te' => 'decimal:2',
+        'thanh_toan_luc' => 'datetime',
+        'bat_dau_xu_ly_luc' => 'datetime',
+        'hoan_thanh_luc' => 'datetime',
+        'that_bai_luc' => 'datetime',
     ];
+
+    /**
+     * Đơn hàng thuộc một người dùng / khách hàng.
+     */
+    public function nguoiDung()
+    {
+        return $this->belongsTo(User::class, 'nguoi_dung_id');
+    }
 
     /**
      * Đơn hàng có thể thuộc API Partner.
@@ -127,5 +146,10 @@ class DonHang extends Model
     public function lanGoiNhaCungCap()
     {
         return $this->hasMany(LanGoiNhaCungCap::class, 'don_hang_id');
+    }
+
+    public function nhaCungCapThanhCong()
+    {
+        return $this->belongsTo(NhaCungCap::class, 'nha_cung_cap_thanh_cong_id');
     }
 }

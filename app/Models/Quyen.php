@@ -18,10 +18,6 @@ class Quyen extends Model
     // Nếu không khai báo, Laravel có thể đoán sai tên bảng.
     protected $table = 'quyen';
 
-    // NOTE: Bảng quyen hiện không có created_at và updated_at.
-    // Dòng này báo cho Laravel đừng tự động ghi timestamps.
-    public $timestamps = false;
-
     // NOTE: Các cột được phép thêm/sửa bằng create() hoặc update().
     // Sau này làm màn quản lý quyền thì Laravel chỉ cho ghi các field này.
     protected $fillable = [

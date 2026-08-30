@@ -36,6 +36,18 @@ class LoaiSanPham extends Model
         'mo_ta',
     ];
 
+    public function getHinhAnhUrlAttribute(): ?string
+    {
+        if (! empty($this->hinh_anh)) {
+            if (str_starts_with($this->hinh_anh, 'http://') || str_starts_with($this->hinh_anh, 'https://') || str_starts_with($this->hinh_anh, 'data:')) {
+                return $this->hinh_anh;
+            }
+            return asset($this->hinh_anh);
+        }
+
+        return null;
+    }
+
     // NOTE: Loại sản phẩm này thuộc về dịch vụ nào.
     // Ví dụ Viettel thuộc dịch vụ PIN_CODE.
     public function dichVu(): BelongsTo

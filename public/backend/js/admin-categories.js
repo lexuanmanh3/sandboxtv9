@@ -51,12 +51,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  document.addEventListener("click", () => {
+  function closeAllRowMenus() {
     document.querySelectorAll(".account-row-actions.is-open").forEach((wrapper) => {
       wrapper.classList.remove("is-open");
       wrapper.querySelector(".account-row-menu")?.setAttribute("hidden", "");
     });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".account-row-actions")) {
+      closeAllRowMenus();
+    }
   });
+
+  window.addEventListener("scroll", closeAllRowMenus, { passive: true, capture: true });
+  document.addEventListener("scroll", closeAllRowMenus, { passive: true, capture: true });
+  window.addEventListener("resize", closeAllRowMenus, { passive: true });
 
   const categoryModal = document.querySelector('[data-category-modal="form"]');
   const deleteModal = document.querySelector('[data-category-modal="delete"]');
@@ -110,6 +120,66 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  const fileInput = document.querySelector("[data-category-file-input]");
+  const imageTextInput = document.querySelector("[data-category-image-input]");
+  const imagePreview = document.querySelector("[data-category-image-preview]");
+  const imagePlaceholder = document.querySelector("[data-category-image-placeholder]");
+
+  function resolveImageUrl(src) {
+    if (!src || typeof src !== "string") return "";
+    src = src.trim();
+    if (src.startsWith("data:") || src.startsWith("blob:") || src.startsWith("http://") || src.startsWith("https://")) {
+      return src;
+    }
+    const baseUrl = window.APP_ASSET_BASE_URL || "/";
+    const cleanSrc = src.startsWith("/") ? src.slice(1) : src;
+    const cleanBase = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+    return cleanBase + cleanSrc;
+  }
+
+  function updateImagePreview(src) {
+    const fullUrl = resolveImageUrl(src);
+    if (fullUrl && imagePreview && imagePlaceholder) {
+      imagePreview.src = fullUrl;
+      imagePreview.style.display = "block";
+      imagePlaceholder.style.display = "none";
+      imagePreview.onerror = () => {
+        imagePreview.style.display = "none";
+        imagePlaceholder.style.display = "block";
+        imagePlaceholder.textContent = "Lỗi ảnh";
+      };
+      imagePreview.onload = () => {
+        imagePreview.style.display = "block";
+        imagePlaceholder.style.display = "none";
+      };
+    } else if (imagePreview && imagePlaceholder) {
+      imagePreview.src = "";
+      imagePreview.style.display = "none";
+      imagePlaceholder.style.display = "block";
+      imagePlaceholder.textContent = "Chưa có ảnh";
+    }
+  }
+
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        updateImagePreview(e.target?.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  imageTextInput?.addEventListener("input", () => {
+    const val = imageTextInput.value.trim();
+    if (val) {
+      updateImagePreview(val);
+    } else {
+      updateImagePreview("");
+    }
+  });
+
   // NOTE: Mo modal tao loai san pham moi voi action store va method POST.
   function prepareCreateForm() {
     categoryForm?.reset();
@@ -117,6 +187,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setField("loai_san_pham_cha_id", "");
     setField("trang_thai", "hoat_dong");
     setField("thu_tu", "0");
+    if (fileInput) fileInput.value = "";
+    updateImagePreview("");
     if (categoryForm?.dataset.storeUrl) {
       categoryForm.action = categoryForm.dataset.storeUrl;
     }
@@ -139,6 +211,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setField("thu_tu", category.thu_tu ?? 0);
     setField("hinh_anh", category.hinh_anh);
     setField("mo_ta", category.mo_ta);
+    if (fileInput) fileInput.value = "";
+    updateImagePreview(category.hinh_anh);
   }
 
   // NOTE: Mo modal sua loai san pham, submit PUT ve route update tuong ung.
@@ -209,8 +283,68 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" || event.key === "Esc") {
       closeModals();
+      document.querySelectorAll(".account-row-actions.is-open").forEach((wrapper) => {
+        wrapper.classList.remove("is-open");
+        wrapper.querySelector(".account-row-menu")?.setAttribute("hidden", "");
+      });
     }
+  });
+
+  // Xử lý Checkbox Chọn nhiều & Thanh tác vụ nổi (Bulk Action Bar)
+  const selectAllCheckbox = document.querySelector("[data-select-all]");
+  const itemCheckboxes = document.querySelectorAll(".bulk-item-checkbox");
+  const bulkActionBar = document.getElementById("bulkActionBar");
+  const bulkSelectedCount = document.getElementById("bulkSelectedCount");
+  const bulkDeselectBtn = document.getElementById("bulkDeselectBtn");
+  const bulkDeleteBtn = document.getElementById("bulkDeleteBtn");
+  const bulkDeleteHiddenInputs = document.getElementById("bulkCategoryDeleteHiddenInputs");
+  const bulkDeleteConfirmCount = document.getElementById("bulkCategoryDeleteConfirmCount");
+  const bulkDeleteModal = document.querySelector('[data-category-modal="bulk-delete"]');
+
+  function updateBulkBar() {
+    const checked = [...itemCheckboxes].filter(cb => cb.checked);
+    const count = checked.length;
+
+    if (bulkSelectedCount) bulkSelectedCount.textContent = count;
+    if (bulkDeleteConfirmCount) bulkDeleteConfirmCount.textContent = count;
+
+    if (count > 0) {
+      bulkActionBar?.classList.add("is-visible");
+    } else {
+      bulkActionBar?.classList.remove("is-visible");
+    }
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = count > 0 && count === itemCheckboxes.length;
+      selectAllCheckbox.indeterminate = count > 0 && count < itemCheckboxes.length;
+    }
+  }
+
+  selectAllCheckbox?.addEventListener("change", (e) => {
+    itemCheckboxes.forEach(cb => cb.checked = e.target.checked);
+    updateBulkBar();
+  });
+
+  itemCheckboxes.forEach(cb => {
+    cb.addEventListener("change", updateBulkBar);
+    cb.addEventListener("click", (e) => e.stopPropagation());
+  });
+
+  bulkDeselectBtn?.addEventListener("click", () => {
+    itemCheckboxes.forEach(cb => cb.checked = false);
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    updateBulkBar();
+  });
+
+  bulkDeleteBtn?.addEventListener("click", () => {
+    const checked = [...itemCheckboxes].filter(cb => cb.checked);
+    if (checked.length === 0) return;
+
+    if (bulkDeleteHiddenInputs) {
+      bulkDeleteHiddenInputs.innerHTML = checked.map(cb => `<input type="hidden" name="ids[]" value="${cb.value}">`).join('');
+    }
+    openModal(bulkDeleteModal);
   });
 });

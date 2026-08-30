@@ -26,6 +26,8 @@ class SanPham extends Model
         'ma_san_pham',
         'ten_san_pham',
         'menh_gia',
+        'gia_ban',
+        'chiet_khau_phan_tram',
         'don_vi',
         'thu_tu',
         'trang_thai',
@@ -42,6 +44,8 @@ class SanPham extends Model
     // Giúp Laravel đọc dữ liệu đúng kiểu khi lấy từ database.
     protected $casts = [
         'menh_gia' => 'decimal:2',
+        'gia_ban' => 'decimal:2',
+        'chiet_khau_phan_tram' => 'decimal:2',
         'so_tien_toi_thieu' => 'decimal:2',
         'so_tien_toi_da' => 'decimal:2',
         'hien_thi_web_app' => 'boolean',
@@ -66,6 +70,7 @@ class SanPham extends Model
             'loai_san_pham_id'
         );
     }
+
     /**
      * Một sản phẩm cụ thể có thể có nhiều cấu hình NCC.
      * Ví dụ Viettel 20k có thể có NCC chính và NCC dự phòng.
@@ -74,7 +79,13 @@ class SanPham extends Model
     {
         return $this->hasMany(CauHinhDichVu::class, 'san_pham_id');
     }
-        /**
+
+    public function nhaCungCapMappings()
+    {
+        return $this->hasMany(SanPhamNhaCungCap::class, 'san_pham_id');
+    }
+
+    /**
      * Các dòng cấp quyền API Partner cho sản phẩm này.
      */
     public function daiLyApiDuocPhep()

@@ -35,8 +35,9 @@ class StoreLoaiSanPhamRequest extends FormRequest
             'loai_san_pham_cha_id' => ['nullable', 'integer', 'exists:loai_san_pham,id'],
             'trang_thai' => ['required', Rule::in(array_keys($this->statuses()))],
             'thu_tu' => ['nullable', 'integer', 'min:0'],
-            // NOTE: hinh_anh hien luu duong dan/URL dang text vi du an chua co ha tang upload file.
+            // NOTE: hinh_anh hien luu duong dan/URL dang text hoac upload truc tiep qua hinh_anh_file.
             'hinh_anh' => ['nullable', 'string', 'max:255'],
+            'hinh_anh_file' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
             'mo_ta' => ['nullable', 'string'],
         ];
     }

@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use App\Services\Authorization\PermissionCacheService;
+use App\Services\Authorization\PermissionTreeService;
+use App\Services\Audit\AuditService;
 
 class RoleAccessController extends Controller
 {
@@ -32,7 +35,13 @@ class RoleAccessController extends Controller
      * Cập nhật quyền truy cập trang/module và cờ "vai trò mặc định" cho một vai trò.
      * Các quyền thao tác cũ không hiển thị ở cây này sẽ được giữ nguyên khi lưu.
      */
-    public function updatePermissions(Request $request, VaiTro $role): RedirectResponse
+    public function updatePermissions(
+        Request $request,
+        VaiTro $role,
+        PermissionTreeService $tree,
+        PermissionCacheService $cache,
+        AuditService $audit
+    ): RedirectResponse
     {
         $validated = $request->validate([
             'quyen' => ['nullable', 'array'],
@@ -41,15 +50,18 @@ class RoleAccessController extends Controller
         ]);
 
         $managedPermissionIds = $this->managedAccessPermissions()->pluck('id');
+        $selectedIds = $tree->normalize($validated['quyen'] ?? []);
 
         $keptPermissionIds = $role->quyen()
             ->whereNotIn('quyen.id', $managedPermissionIds)
             ->pluck('quyen.id');
 
-        DB::transaction(function () use ($role, $validated, $keptPermissionIds) {
+        $before = ['permission_ids' => $role->quyen()->pluck('quyen.id')->all(), 'mac_dinh' => $role->mac_dinh];
+
+        DB::transaction(function () use ($role, $validated, $keptPermissionIds, $selectedIds) {
             $role->quyen()->sync(
                 $keptPermissionIds
-                    ->merge($validated['quyen'] ?? [])
+                    ->merge($selectedIds)
                     ->unique()
                     ->values()
                     ->all()
@@ -68,6 +80,13 @@ class RoleAccessController extends Controller
             $role->update(['mac_dinh' => $macDinh]);
         });
 
+        $cache->forgetRole((int) $role->getKey());
+        $role->refresh();
+        $audit->record('role.permissions.updated', $role, $before, [
+            'permission_ids' => $role->quyen()->pluck('quyen.id')->all(),
+            'mac_dinh' => $role->mac_dinh,
+        ]);
+
         return back()->with('success', 'Cập nhật quyền truy cập cho vai trò thành công.');
     }
 
@@ -78,13 +97,7 @@ class RoleAccessController extends Controller
     private function managedAccessPermissions(): Collection
     {
         return Quyen::where('trang_thai', 'hoat_dong')
-            ->where(function ($query) {
-                $query
-                    ->where('ma_quyen', 'like', '%.access')
-                    ->orWhere('ma_quyen', 'like', 'page.%')
-                    ->orWhere('ma_quyen', 'like', 'backend.%')
-                    ->orWhere('ma_quyen', 'like', 'frontend.%');
-            })
+            ->where('nhom_quyen', '!=', 'Tương thích cũ')
             ->orderBy('thu_tu')
             ->orderBy('ten_quyen')
             ->get();

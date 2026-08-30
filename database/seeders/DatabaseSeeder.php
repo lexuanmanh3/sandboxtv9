@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             DichVuSeeder::class,
             LoaiSanPhamSeeder::class,
             DaiLyApiSeeder::class,
+            SanPhamSeeder::class,
         ]);
         
     }

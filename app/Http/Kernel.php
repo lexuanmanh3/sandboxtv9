@@ -36,12 +36,14 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\RecordActivityLog::class,
         ],
 
         'api' => [
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\RecordActivityLog::class,
         ],
     ];
 
@@ -65,5 +67,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'vai_tro' => \App\Http\Middleware\KiemTraVaiTro::class,
         'quyen' => \App\Http\Middleware\KiemTraQuyen::class,
+        'active' => \App\Http\Middleware\EnsureActiveUser::class,
+        'activity.log' => \App\Http\Middleware\RecordActivityLog::class,
     ];
 }

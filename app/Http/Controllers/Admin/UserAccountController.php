@@ -19,6 +19,8 @@ use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
+use App\Services\Authorization\PermissionCacheService;
+use App\Services\Audit\AuditService;
 
 class UserAccountController extends Controller
 {
@@ -30,7 +32,9 @@ class UserAccountController extends Controller
     {
         $query = $this->buildAccountsQuery($request);
 
-        $users = $query->latest()->paginate(10)->withQueryString();
+        $perPage = in_array((int) $request->query('per_page'), [10, 20, 50, 100], true) ? (int) $request->query('per_page') : 10;
+
+        $users = $query->latest()->paginate($perPage)->withQueryString();
 
         $stats = [
             'total' => User::where('trang_thai', '!=', 'da_xoa')->count(),
@@ -212,6 +216,9 @@ class UserAccountController extends Controller
             'trang_thai' => 'tam_khoa',
         ]);
 
+        app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
+        app(AuditService::class)->record('user.locked', $account, ['bi_khoa' => false], ['bi_khoa' => true]);
+
         // TODO: Khi co bang audit log rieng, ghi log khoa tai khoan tai day.
 
         return back()->with('success', 'Khóa tài khoản thành công.');
@@ -231,6 +238,9 @@ class UserAccountController extends Controller
             'bi_khoa' => false,
             'trang_thai' => 'hoat_dong',
         ]);
+
+        app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
+        app(AuditService::class)->record('user.unlocked', $account, ['bi_khoa' => true], ['bi_khoa' => false]);
 
         // TODO: Khi co bang audit log rieng, ghi log mo khoa tai khoan tai day.
 
@@ -256,9 +266,55 @@ class UserAccountController extends Controller
             'trang_thai' => 'da_xoa',
         ]);
 
-        // TODO: Khi co bang audit log rieng, ghi log xoa mem tai khoan tai day.
+        app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
+        app(AuditService::class)->record('user.deleted', $account, null, ['trang_thai' => 'da_xoa']);
 
         return back()->with('success', 'Xóa tài khoản thành công.');
+    }
+
+    /**
+     * Xóa nhiều tài khoản cùng lúc (Xóa mềm và an toàn không xóa tài khoản đang đăng nhập/admin gốc).
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:nguoi_dung,id'],
+        ]);
+
+        $ids = $validated['ids'];
+        $currentUserId = auth()->id();
+        $deleted = 0;
+        $skippedSelf = false;
+
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if (!$user) continue;
+
+            if ($this->isCurrentUser($user) || $this->isRootAdmin($user)) {
+                $skippedSelf = true;
+                continue;
+            }
+
+            try {
+                $user->update([
+                    'bi_khoa' => true,
+                    'trang_thai' => 'da_xoa',
+                ]);
+                app(PermissionCacheService::class)->forgetUser((int) $user->getKey());
+                app(AuditService::class)->record('user.deleted', $user, null, ['trang_thai' => 'da_xoa']);
+                $deleted++;
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+
+        $msg = "Đã xóa thành công {$deleted} tài khoản đã chọn.";
+        if ($skippedSelf) {
+            $msg .= " (Hệ thống tự động bỏ qua tài khoản đang đăng nhập hoặc admin gốc).";
+        }
+
+        return back()->with('success', $msg);
     }
 
     /**
@@ -272,7 +328,10 @@ class UserAccountController extends Controller
             $roleIds = [VaiTro::vaiTroMacDinh()->id];
         }
 
-        $user->vaiTro()->sync($roleIds);
+        $before = $user->vaiTro()->pluck('vai_tro.id')->all();
+        $user->vaiTro()->sync(array_values(array_unique(array_map('intval', $roleIds))));
+        app(PermissionCacheService::class)->forgetUser((int) $user->getKey());
+        app(AuditService::class)->record('user.roles.updated', $user, ['role_ids' => $before], ['role_ids' => $roleIds]);
     }
 
     /**

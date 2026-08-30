@@ -256,9 +256,9 @@ class AuthController extends Controller
     private function duongDanSauDangNhap(User $user): ?string
     {
         $adminRoutes = [
-            'dashboard.access' => route('admin.dashboard'),
-            'account.access' => route('admin.accounts'),
-            'role.access' => route('admin.roles'),
+            'dashboard.view' => route('admin.dashboard'),
+            'account.view' => route('admin.accounts'),
+            'role.view' => route('admin.roles'),
         ];
 
         foreach ($adminRoutes as $permission => $url) {

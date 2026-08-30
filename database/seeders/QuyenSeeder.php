@@ -131,6 +131,29 @@ class QuyenSeeder extends Seeder
 
         $this->upsertTree($accessTree);
 
+        $this->upsertActionPermissions([
+            'dashboard.access' => [['dashboard.view', 'Xem dashboard']],
+            'account.access' => [
+                ['account.view', 'Xem tài khoản'], ['account.create', 'Tạo tài khoản'],
+                ['account.update', 'Sửa tài khoản'], ['account.delete', 'Xóa tài khoản'],
+                ['account.export', 'Xuất tài khoản'], ['account.lock', 'Khóa/mở khóa tài khoản'],
+            ],
+            'role.access' => [
+                ['role.view', 'Xem vai trò'], ['role.assign_permission', 'Gán quyền cho vai trò'],
+            ],
+            'dich_vu.access' => [
+                ['dich_vu.view', 'Xem dịch vụ'], ['dich_vu.create', 'Tạo dịch vụ'],
+                ['dich_vu.update', 'Sửa dịch vụ'], ['dich_vu.delete', 'Xóa dịch vụ'],
+                ['dich_vu.export', 'Xuất dịch vụ'],
+            ],
+            'loai_san_pham.access' => [
+                ['loai_san_pham.view', 'Xem loại sản phẩm'], ['loai_san_pham.create', 'Tạo loại sản phẩm'],
+                ['loai_san_pham.update', 'Sửa loại sản phẩm'], ['loai_san_pham.delete', 'Xóa loại sản phẩm'],
+                ['loai_san_pham.export', 'Xuất loại sản phẩm'],
+            ],
+        ]);
+        $this->migrateLegacyAccessGrants();
+
         // Các quyền cũ được giữ lại để không phá những nơi đã tham chiếu trước đó.
         // Chúng không hiện trong cây phân quyền truy cập mới.
         $legacyPermissions = [
@@ -169,6 +192,47 @@ class QuyenSeeder extends Seeder
         }
     }
 
+    private function upsertActionPermissions(array $groups): void
+    {
+        foreach ($groups as $parentCode => $actions) {
+            $parentId = DB::table('quyen')->where('ma_quyen', $parentCode)->value('id');
+            if (! $parentId) {
+                continue;
+            }
+            foreach ($actions as $index => [$code, $name]) {
+                $this->upsertPermission([
+                    'ma_quyen' => $code,
+                    'ten_quyen' => $name,
+                    'nhom_quyen' => $parentCode,
+                    'thu_tu' => ($index + 1) * 10,
+                ], (int) $parentId);
+            }
+        }
+    }
+
+    /** Chuyển quyền truy cập module cũ thành đầy đủ quyền hành động để giữ tương thích ngược. */
+    private function migrateLegacyAccessGrants(): void
+    {
+        $parentCodes = [
+            'dashboard.access', 'account.access', 'role.access',
+            'dich_vu.access', 'loai_san_pham.access',
+        ];
+
+        foreach (DB::table('quyen')->whereIn('ma_quyen', $parentCodes)->get() as $parent) {
+            $roleIds = DB::table('vai_tro_quyen')->where('quyen_id', $parent->id)->pluck('vai_tro_id');
+            $childIds = DB::table('quyen')->where('quyen_cha_id', $parent->id)->pluck('id');
+
+            foreach ($roleIds as $roleId) {
+                foreach ($childIds as $childId) {
+                    DB::table('vai_tro_quyen')->updateOrInsert(
+                        ['vai_tro_id' => $roleId, 'quyen_id' => $childId],
+                        ['tao_luc' => now()]
+                    );
+                }
+            }
+        }
+    }
+
     private function upsertPermission(array $permission, ?int $parentId): int
     {
         DB::table('quyen')->updateOrInsert(
@@ -196,20 +260,7 @@ class QuyenSeeder extends Seeder
             return;
         }
 
-        $defaultCodes = [
-            'page.root',
-            'backend.root',
-            'backend.inventory',
-            'dashboard.access',
-            'inventory.access',
-            'backend.catalog',
-            'dich_vu.access',
-            'loai_san_pham.access',
-            'backend.admin',
-            'account.access',
-            'role.access',
-            'service_config.access',
-        ];
+        $defaultCodes = DB::table('quyen')->where('trang_thai', 'hoat_dong')->pluck('ma_quyen')->all();
 
         $this->removeManagedAccessPermissions((int) $adminRole->id);
 

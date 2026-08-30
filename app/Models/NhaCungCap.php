@@ -63,4 +63,9 @@ class NhaCungCap extends Model
     {
         return $this->hasMany(CauHinhDichVu::class, 'nha_cung_cap_id');
     }
+
+    public function sanPhamMappings()
+    {
+        return $this->hasMany(SanPhamNhaCungCap::class, 'nha_cung_cap_id');
+    }
 }

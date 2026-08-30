@@ -98,6 +98,9 @@
         <table class="account-table">
           <thead>
             <tr>
+              <th class="th-checkbox">
+                <input type="checkbox" class="account-table-checkbox" data-select-all title="Chọn tất cả">
+              </th>
               <th>Hành động</th>
               <th>Mã dịch vụ</th>
               <th>Tên dịch vụ</th>
@@ -123,6 +126,9 @@
                 ];
               @endphp
               <tr data-service-row>
+                <td class="td-checkbox">
+                  <input type="checkbox" class="account-table-checkbox bulk-item-checkbox" value="{{ $service->id }}">
+                </td>
                 <td>
                   <div class="account-row-actions">
                     <button class="account-row-action" type="button" data-row-action>
@@ -151,7 +157,7 @@
               </tr>
             @empty
               <tr>
-                <td class="account-empty" colspan="6">Chưa có dịch vụ nào trong hệ thống.</td>
+                <td class="account-empty" colspan="7">Chưa có dịch vụ nào trong hệ thống.</td>
               </tr>
             @endforelse
           </tbody>
@@ -159,10 +165,20 @@
       </div>
 
       <footer class="account-pagination">
-        <div>
+        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
           <span>
             Đang xem {{ $services->firstItem() ?? 0 }} đến {{ $services->lastItem() ?? 0 }} trong tổng số {{ $services->total() }} mục
           </span>
+          <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--admin-slate-600);">
+            <span>Hiển thị:</span>
+            <select onchange="location.href = this.value;" style="border: 1px solid var(--admin-slate-300); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: #fff; cursor: pointer;">
+              @foreach ([10, 20, 50, 100] as $size)
+                <option value="{{ request()->fullUrlWithQuery(['per_page' => $size, 'page' => 1]) }}" @selected(request('per_page', 10) == $size)>
+                  {{ $size }} / trang
+                </option>
+              @endforeach
+            </select>
+          </label>
         </div>
 
         <nav aria-label="Phân trang dịch vụ">
@@ -226,6 +242,46 @@
     </section>
   </div>
 
+  {{-- THANH TÁC VỤ NỔI KHI CHỌN NHIỀU DỊCH VỤ --}}
+  <div class="account-bulk-bar" id="bulkActionBar">
+    <div class="account-bulk-bar__info">
+      <span>Đã chọn:</span>
+      <span class="account-bulk-bar__badge" id="bulkSelectedCount">0</span>
+    </div>
+    <div class="account-bulk-bar__actions">
+      <button type="button" class="account-bulk-btn account-bulk-btn--ghost" id="bulkDeselectBtn">Bỏ chọn</button>
+      <button type="button" class="account-bulk-btn account-bulk-btn--danger" id="bulkDeleteBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2;">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        <span>Xóa các mục đã chọn</span>
+      </button>
+    </div>
+  </div>
+
+  {{-- MODAL XÁC NHẬN XÓA NHIỀU DỊCH VỤ --}}
+  <div class="account-modal" data-service-modal="bulk-delete" hidden>
+    <div class="account-modal__backdrop" data-service-modal-close></div>
+    <section class="account-modal__dialog account-modal__dialog--sm" role="dialog" aria-modal="true" aria-labelledby="bulkServiceDeleteTitle">
+      <header class="account-modal__header">
+        <h2 id="bulkServiceDeleteTitle">Xóa nhiều dịch vụ</h2>
+        <button type="button" class="account-modal__close" data-service-modal-close aria-label="Đóng">×</button>
+      </header>
+      <form class="account-modal__body" method="POST" action="{{ route('admin.services.bulk-delete') }}" id="bulkServiceDeleteForm">
+        @csrf
+        <div id="bulkServiceDeleteHiddenInputs"></div>
+        <p class="account-confirm-text" style="padding: 20px; margin: 0; color: var(--admin-slate-700);">
+          Bạn có chắc muốn xóa <strong id="bulkServiceDeleteConfirmCount" style="color: #ef4444;">0</strong> dịch vụ đã chọn? Thao tác này không thể hoàn tác nếu không có ràng buộc dữ liệu.
+        </p>
+        <footer class="account-modal__footer">
+          <button class="account-btn account-btn--muted" type="button" data-service-modal-close>Hủy</button>
+          <button class="account-btn account-btn--danger" type="submit">Xóa các dịch vụ</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
   {{-- NOTE: Modal xac nhan xoa, submit DELETE ve controller destroy, giong pattern man tai khoan. --}}
   <div class="account-modal" data-service-modal="delete" hidden>
     <div class="account-modal__backdrop" data-service-modal-close></div>
@@ -248,5 +304,5 @@
 @endsection
 
 @push('scripts')
-  <script src="{{ asset('backend/js/admin-services.js') }}"></script>
+  <script src="{{ asset('backend/js/admin-services.js') }}?v={{ time() }}"></script>
 @endpush

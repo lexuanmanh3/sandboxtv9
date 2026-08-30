@@ -448,10 +448,27 @@
   line-height: 16px;
   font-weight: 700;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  outline: none;
+  transition: all 0.15s ease;
 }
 
 .account-row-action:hover {
   background: var(--admin-slate-50);
+  border-color: var(--admin-slate-300);
+}
+
+.account-row-action:focus,
+.account-row-action:focus-visible {
+  outline: none;
+  border-color: var(--admin-brand-500);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
+}
+
+.account-row-actions.is-open .account-row-action {
+  border-color: var(--admin-brand-500);
+  background: #f0fdf4;
+  color: var(--admin-brand-700);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 }
 
 .account-row-action svg {
@@ -462,6 +479,7 @@
 }
 
 .account-row-actions.is-open .account-row-action svg {
+  color: var(--admin-brand-600);
   transform: rotate(180deg);
 }
 
@@ -485,17 +503,24 @@
 .account-row-menu button {
   border: 0;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   background: transparent;
   color: var(--admin-slate-700);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
+  line-height: 18px;
   text-align: left;
+  outline: none;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
 }
 
-.account-row-menu button:hover {
-  background: var(--admin-slate-50);
+.account-row-menu button:hover,
+.account-row-menu button:focus-visible {
+  background: var(--admin-slate-100);
+  color: var(--admin-slate-900);
+  outline: none;
 }
 
 .account-empty {
@@ -684,6 +709,24 @@
 
 .account-modal__body {
   overflow: auto;
+}
+
+.account-modal__footer {
+  border-top: 1px solid var(--admin-slate-200);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #fff;
+}
+
+.account-confirm-text {
+  padding: 20px;
+  margin: 0;
+  color: var(--admin-slate-700);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .account-tabs {
@@ -1120,3 +1163,112 @@
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   FLOATING BULK ACTION BAR & CHECKBOXES
+   ========================================================================== */
+.account-table th.th-checkbox,
+.account-table td.td-checkbox {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  text-align: center;
+  padding: 8px 6px;
+}
+
+.account-table-checkbox {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  border: 1.5px solid var(--admin-slate-300);
+  cursor: pointer;
+  accent-color: var(--admin-brand-600);
+  vertical-align: middle;
+  transition: all 0.15s ease;
+}
+
+.account-table-checkbox:hover {
+  border-color: var(--admin-brand-500);
+}
+
+.account-bulk-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: #1e293b;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 999px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35), 0 2px 6px rgba(15, 23, 42, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1050;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.account-bulk-bar.is-visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.account-bulk-bar__info {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-bulk-bar__badge {
+  background: var(--admin-brand-600);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.account-bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-bulk-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.account-bulk-btn--danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.account-bulk-btn--danger:hover {
+  background: #dc2626;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.account-bulk-btn--ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+.account-bulk-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+

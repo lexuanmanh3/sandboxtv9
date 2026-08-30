@@ -36,6 +36,7 @@ class UpdateLoaiSanPhamRequest extends FormRequest
             'trang_thai' => ['required', Rule::in(array_keys($this->statuses()))],
             'thu_tu' => ['nullable', 'integer', 'min:0'],
             'hinh_anh' => ['nullable', 'string', 'max:255'],
+            'hinh_anh_file' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
             'mo_ta' => ['nullable', 'string'],
         ];
     }

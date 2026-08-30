@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use App\Services\Audit\AuditService;
 
 class KiemTraQuyen
 {
@@ -29,7 +30,14 @@ class KiemTraQuyen
             ->all();
 
         // NOTE: Neu user khong co bat ky quyen truy cap nao trong danh sach thi tra ve 403.
-        if (!$user || !$user->coMotTrongCacQuyen($danhSachQuyen)) {
+        if (!$user || ! $user->dangHoatDong() || !$user->coMotTrongCacQuyen($danhSachQuyen)) {
+            app(AuditService::class)->record(
+                'authorization.denied',
+                $user,
+                null,
+                ['required_permissions' => $danhSachQuyen],
+                'that_bai'
+            );
             abort(403, 'Bạn không có quyền truy cập chức năng này.');
         }
 

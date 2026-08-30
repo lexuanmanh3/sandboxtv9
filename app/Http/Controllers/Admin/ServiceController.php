@@ -26,7 +26,9 @@ class ServiceController extends Controller
     {
         $query = $this->buildServiceQuery($request);
 
-        $services = $query->orderBy('thu_tu')->orderBy('ten_dich_vu')->paginate(10)->withQueryString();
+        $perPage = in_array((int) $request->query('per_page'), [10, 20, 50, 100], true) ? (int) $request->query('per_page') : 10;
+
+        $services = $query->orderBy('thu_tu')->orderBy('ten_dich_vu')->paginate($perPage)->withQueryString();
 
         return view('admin.services', [
             'services' => $services,
@@ -108,6 +110,40 @@ class ServiceController extends Controller
         }
 
         return back()->with('success', 'Xóa dịch vụ thành công.');
+    }
+
+    /**
+     * Xóa nhiều dịch vụ cùng lúc.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:dich_vu,id'],
+        ]);
+
+        $ids = $validated['ids'];
+        $deleted = 0;
+        $failed = 0;
+
+        foreach ($ids as $id) {
+            try {
+                $service = DichVu::find($id);
+                if ($service) {
+                    $service->delete();
+                    $deleted++;
+                }
+            } catch (Throwable $e) {
+                report($e);
+                $failed++;
+            }
+        }
+
+        if ($failed > 0) {
+            return back()->with('success', "Đã xóa thành công {$deleted} dịch vụ. ({$failed} dịch vụ không thể xóa do đang có dữ liệu liên kết).");
+        }
+
+        return back()->with('success', "Đã xóa thành công {$deleted} dịch vụ đã chọn.");
     }
 
     /**
