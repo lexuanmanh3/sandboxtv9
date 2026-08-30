@@ -412,8 +412,27 @@
                   <input type="number" name="canh_bao_xu_ly_cham_giay" value="0">
                   <small style="color: #64748b; font-size: 11px; margin-top: 2px;">Nếu gọi NCC mất quá số giây này (ví dụ: 3s), hệ thống sẽ gửi cảnh báo Telegram (0 = Tắt).</small>
                 </label>
-                <label><span>Kênh cảnh báo</span><select name="kenh_canh_bao"><option>Telegram</option><option>Email</option></select></label>
-                <label><span>ChatID</span><input type="text" name="nhom_canh_bao_chat_id"></label>
+                <label><span>Kênh cảnh báo</span><select name="kenh_canh_bao"><option value="Telegram">Telegram</option><option value="Email">Email</option></select></label>
+                <label>
+                  <span>Chọn nhóm nhận thông báo</span>
+                  <select name="nhom_canh_bao_chat_id" id="providerTelegramChatIdSelect">
+                    <option value="">-- Mặc định (Nhóm Lỗi &amp; Kỹ thuật hệ thống) --</option>
+                    @if (!empty($telegramConfig->chat_id_alert))
+                      <option value="{{ $telegramConfig->chat_id_alert }}">Nhóm Cảnh báo Lỗi &amp; Kỹ thuật ({{ $telegramConfig->chat_id_alert }})</option>
+                    @endif
+                    @if (!empty($telegramConfig->chat_id_order))
+                      <option value="{{ $telegramConfig->chat_id_order }}">Nhóm Đơn hàng Thành công ({{ $telegramConfig->chat_id_order }})</option>
+                    @endif
+                    @if (!empty($telegramConfig->chat_id_admin))
+                      <option value="{{ $telegramConfig->chat_id_admin }}">Nhóm Quản trị &amp; Hoàn tiền ({{ $telegramConfig->chat_id_admin }})</option>
+                    @endif
+                    <option value="__custom__">-- Tùy chỉnh Chat ID khác... --</option>
+                  </select>
+                </label>
+                <label id="providerCustomChatIdWrapper" style="display: none;">
+                  <span>ChatID tùy chỉnh</span>
+                  <input type="text" id="providerCustomChatIdInput" placeholder="Ví dụ: -1001234567890">
+                </label>
                 <label class="account-form-grid__full"><span>Bỏ qua mã lỗi</span><input type="text" name="bo_qua_ma_loi_ncc"></label>
                 <label class="account-form-grid__full"><span>Bỏ qua nội dung lỗi</span><input type="text" name="bo_qua_message_ncc"></label>
             </div>
@@ -755,6 +774,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (apiPwdInd) apiPwdInd.style.display = "none";
       if (privKeyInd) privKeyInd.style.display = "none";
 
+      const teleSelect = document.getElementById("providerTelegramChatIdSelect");
+      const customWrapper = document.getElementById("providerCustomChatIdWrapper");
+      const customInput = document.getElementById("providerCustomChatIdInput");
+      if (teleSelect) teleSelect.selectedIndex = 0;
+      if (customWrapper) customWrapper.style.display = "none";
+      if (customInput) customInput.value = "";
+
       // Kích hoạt lại toàn bộ inputs
       providerForm?.querySelectorAll("input, select").forEach((input) => {
         input.disabled = false;
@@ -764,6 +790,30 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelector('[data-provider-tab="general"]')?.click();
       openModal(formModal);
     });
+  });
+
+  // Lắng nghe thay đổi dropdown chọn nhóm Telegram
+  const providerTeleSelect = document.getElementById("providerTelegramChatIdSelect");
+  const providerCustomWrapper = document.getElementById("providerCustomChatIdWrapper");
+  const providerCustomInput = document.getElementById("providerCustomChatIdInput");
+
+  providerTeleSelect?.addEventListener("change", () => {
+    if (providerTeleSelect.value === "__custom__") {
+      if (providerCustomWrapper) providerCustomWrapper.style.display = "block";
+      providerCustomInput?.focus();
+    } else {
+      if (providerCustomWrapper) providerCustomWrapper.style.display = "none";
+    }
+  });
+
+  providerForm?.addEventListener("submit", () => {
+    if (providerTeleSelect && providerTeleSelect.value === "__custom__") {
+      const customVal = (providerCustomInput?.value || "").trim();
+      let opt = providerTeleSelect.querySelector('option[value="__custom__"]');
+      if (opt) {
+        opt.value = customVal;
+      }
+    }
   });
 
   // Mở modal Xem chi tiết / Chỉnh sửa
@@ -858,9 +908,33 @@ document.addEventListener("DOMContentLoaded", () => {
       setField("bat_canh_bao", data.bat_canh_bao);
       setField("canh_bao_xu_ly_cham_giay", data.canh_bao_xu_ly_cham_giay);
       setField("kenh_canh_bao", data.kenh_canh_bao);
-      setField("nhom_canh_bao_chat_id", data.nhom_canh_bao_chat_id);
       setField("bo_qua_ma_loi_ncc", data.bo_qua_ma_loi_ncc);
       setField("bo_qua_message_ncc", data.bo_qua_message_ncc);
+
+      // Xử lý chọn nhóm Telegram cảnh báo
+      const teleSelect = document.getElementById("providerTelegramChatIdSelect");
+      const customWrapper = document.getElementById("providerCustomChatIdWrapper");
+      const customInput = document.getElementById("providerCustomChatIdInput");
+      if (teleSelect && customWrapper && customInput) {
+        const currentChatId = String(data.nhom_canh_bao_chat_id || "").trim();
+        let optionFound = false;
+        for (let i = 0; i < teleSelect.options.length; i++) {
+          if (teleSelect.options[i].value !== "__custom__" && teleSelect.options[i].value === currentChatId) {
+            teleSelect.selectedIndex = i;
+            optionFound = true;
+            break;
+          }
+        }
+        if (!optionFound && currentChatId !== "") {
+          teleSelect.value = "__custom__";
+          customInput.value = currentChatId;
+          customWrapper.style.display = "block";
+        } else {
+          if (!optionFound) teleSelect.selectedIndex = 0;
+          customInput.value = "";
+          customWrapper.style.display = "none";
+        }
+      }
 
       // Disable inputs nếu chế độ View
       providerForm?.querySelectorAll("input, select").forEach((input) => {

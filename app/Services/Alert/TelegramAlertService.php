@@ -29,7 +29,7 @@ final class TelegramAlertService
 
         try {
             $url = "https://api.telegram.org/bot{$token}/sendMessage";
-            $response = Http::timeout(5)
+            $response = Http::timeout(10)
                 ->asJson()
                 ->post($url, [
                     'chat_id' => $chatId,

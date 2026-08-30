@@ -49,6 +49,7 @@ class ProviderController extends Controller
             'parentProviders' => NhaCungCap::where('trang_thai', 'hoat_dong')->orderBy('ten_ncc')->get(),
             'statuses' => $this->statuses(),
             'filters' => $request->only(['ma_ncc', 'ten_ncc', 'trang_thai']),
+            'telegramConfig' => \App\Models\CauHinhThongBao::layCauHinhTelegram(),
         ]);
     }
 
