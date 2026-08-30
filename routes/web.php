@@ -119,7 +119,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::put('/admin/providers/{provider}', [ProviderController::class, 'update'])->name('admin.providers.update')->middleware('quyen:service_config.access');
     Route::post('/admin/providers/{provider}/test-connection', [ProviderController::class, 'testConnection'])->name('admin.providers.test-connection')->middleware('quyen:service_config.access');
     Route::patch('/admin/providers/{provider}/toggle-status', [ProviderController::class, 'toggleStatus'])->name('admin.providers.toggle-status')->middleware('quyen:service_config.access');
-    Route::post('/admin/providers/{provider}/reset-circuit', [ProviderController::class, 'resetCircuitBreaker'])->name('admin.providers.reset-circuit')->middleware('quyen:service_config.access');
+    Route::match(['POST', 'PATCH'], '/admin/providers/{provider}/reset-circuit', [ProviderController::class, 'resetCircuitBreaker'])->name('admin.providers.reset-circuit')->middleware('quyen:service_config.access');
     Route::delete('/admin/providers/{provider}', [ProviderController::class, 'destroy'])->name('admin.providers.destroy')->middleware('quyen:service_config.access');
     Route::post('/admin/providers/bulk-delete', [ProviderController::class, 'bulkDestroy'])->name('admin.providers.bulk-delete')->middleware('quyen:service_config.access');
 });

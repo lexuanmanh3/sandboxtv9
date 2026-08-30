@@ -1036,11 +1036,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Thao tác đổi trạng thái nhanh
+  // Thao tác đổi trạng thái nhanh / reset circuit
   document.querySelectorAll("[data-provider-action-submit]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const url = btn.dataset.providerActionSubmit;
+      const method = btn.dataset.method || "POST";
       if (toggleForm && url) {
+        let methodInput = toggleForm.querySelector('input[name="_method"]');
+        if (methodInput) {
+          methodInput.value = method;
+        }
         toggleForm.action = url;
         toggleForm.submit();
       }
