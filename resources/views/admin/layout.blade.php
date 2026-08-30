@@ -56,7 +56,7 @@
         $inventoryOpen = request()->routeIs('admin.dashboard');
         $catalogOpen = request()->routeIs('admin.services', 'app.services', 'admin.categories', 'app.categories', 'admin.products');
         $providerOpen = request()->routeIs('admin.providers', 'admin.provider-products', 'admin.provider-error-codes');
-        $adminOpen = request()->routeIs('admin.accounts', 'app.users', 'admin.roles', 'app.roles', 'admin.audit-logs', 'admin.maintenance');
+        $adminOpen = request()->routeIs('admin.accounts', 'app.users', 'admin.roles', 'app.roles', 'admin.audit-logs', 'admin.maintenance', 'admin.telegram-settings');
       @endphp
 
       <nav class="admin-nav" aria-label="Menu quản trị">
@@ -156,6 +156,9 @@
               @endif
               <a class="{{ request()->routeIs('admin.audit-logs') ? 'is-active' : '' }}" href="{{ route('admin.audit-logs') }}">Nhật ký hoạt động</a>
               <a class="{{ request()->routeIs('admin.maintenance') ? 'is-active' : '' }}" href="{{ route('admin.maintenance') }}">Bảo trì</a>
+              @if ($currentUser?->coQuyen('telegram_setting.view') || $currentUser?->vai_tro === 'admin')
+                <a class="{{ request()->routeIs('admin.telegram-settings') ? 'is-active' : '' }}" href="{{ route('admin.telegram-settings') }}">Thông báo Telegram</a>
+              @endif
             </div>
           </div>
         @endif

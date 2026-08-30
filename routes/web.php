@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\ProviderErrorCodeController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\MaintenanceController;
+use App\Http\Controllers\Admin\TelegramSettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -183,4 +184,12 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/admin/orders/{id}', [OrderController::class, 'show'])->name('admin.orders.show')->middleware('quyen:order.view');
     Route::post('/admin/orders/{id}/refund', [OrderController::class, 'refund'])->name('admin.orders.refund')->middleware('quyen:order.refund');
 });
+
+// NOTE: Module Cấu hình Thông báo Telegram — phân quyền chi tiết
+Route::middleware(['auth', 'active'])->group(function () {
+    Route::get('/admin/telegram-settings', [TelegramSettingController::class, 'index'])->name('admin.telegram-settings')->middleware('quyen:telegram_setting.view');
+    Route::put('/admin/telegram-settings', [TelegramSettingController::class, 'update'])->name('admin.telegram-settings.update')->middleware('quyen:telegram_setting.update');
+    Route::post('/admin/telegram-settings/test', [TelegramSettingController::class, 'testConnection'])->name('admin.telegram-settings.test')->middleware('quyen:telegram_setting.test');
+});
+
 

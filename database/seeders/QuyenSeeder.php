@@ -113,6 +113,12 @@ class QuyenSeeder extends Seeder
                                         'nhom_quyen' => 'Quản trị',
                                         'thu_tu' => 50,
                                     ],
+                                    [
+                                        'ma_quyen' => 'telegram_setting.access',
+                                        'ten_quyen' => 'Cấu hình thông báo Telegram',
+                                        'nhom_quyen' => 'Quản trị',
+                                        'thu_tu' => 60,
+                                    ],
                                 ],
                             ],
                             [
@@ -225,6 +231,11 @@ class QuyenSeeder extends Seeder
                 ['maintenance.view', 'Xem trang bảo trì'], ['maintenance.clear_cache', 'Xóa cache'],
                 ['maintenance.download_logs', 'Tải xuống log'],
             ],
+            'telegram_setting.access' => [
+                ['telegram_setting.view', 'Xem cấu hình thông báo'],
+                ['telegram_setting.update', 'Cập nhật cấu hình thông báo'],
+                ['telegram_setting.test', 'Kiểm tra gửi tin nhắn'],
+            ],
         ]);
         $this->migrateLegacyAccessGrants();
 
@@ -293,6 +304,7 @@ class QuyenSeeder extends Seeder
             'service_config.access', 'product.access',
             'provider_product.access', 'provider_error_code.access',
             'order.access', 'audit_log.access', 'maintenance.access',
+            'telegram_setting.access',
         ];
 
         foreach (DB::table('quyen')->whereIn('ma_quyen', $parentCodes)->get() as $parent) {

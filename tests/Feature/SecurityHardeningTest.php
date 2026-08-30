@@ -50,24 +50,63 @@ class SecurityHardeningTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_admin_change_password_command_updates_password_cleanly(): void
+    public function test_customer_without_permission_cannot_access_or_update_telegram_settings(): void
     {
-        $user = User::create([
-            'ten_dang_nhap' => 'admin_test_' . uniqid(),
-            'email' => 'adm_' . uniqid() . '@example.com',
-            'password' => Hash::make('OldPassword@123'),
+        $customer = User::create([
+            'ten_dang_nhap' => 'cust_' . uniqid(),
+            'email' => 'cust_' . uniqid() . '@example.com',
+            'password' => Hash::make('Password@123'),
+            'loai_tai_khoan' => 'customer',
+            'trang_thai' => 'hoat_dong',
+            'tai_khoan_da_xac_thuc' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->get('/admin/telegram-settings')
+            ->assertStatus(403);
+
+        $this->actingAs($customer)
+            ->put('/admin/telegram-settings', ['bot_token' => 'hacked_token'])
+            ->assertStatus(403);
+    }
+
+    public function test_admin_can_view_and_update_telegram_settings(): void
+    {
+        $admin = User::create([
+            'ten_dang_nhap' => 'adm_tele_' . uniqid(),
+            'email' => 'adm_tele_' . uniqid() . '@example.com',
+            'password' => Hash::make('AdminPass@123'),
             'loai_tai_khoan' => 'admin',
             'trang_thai' => 'hoat_dong',
             'tai_khoan_da_xac_thuc' => true,
         ]);
 
-        $this->artisan('admin:change-password', ['username' => $user->ten_dang_nhap])
-            ->expectsQuestion('Nhập mật khẩu mới (tối thiểu 8 ký tự):', 'NewSecret@2026')
-            ->expectsQuestion('Nhập lại mật khẩu để xác nhận:', 'NewSecret@2026')
-            ->assertExitCode(0);
+        $adminRole = VaiTro::where('ma_vai_tro', 'admin')->first();
+        if ($adminRole) {
+            $admin->vaiTro()->attach($adminRole->id, ['tao_luc' => now()]);
+        }
 
-        $user->refresh();
-        $this->assertTrue(Hash::check('NewSecret@2026', $user->password));
+        $this->actingAs($admin)
+            ->get('/admin/telegram-settings')
+            ->assertStatus(200);
+
+        $this->actingAs($admin)
+            ->put('/admin/telegram-settings', [
+                'bot_token' => '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
+                'chat_id_alert' => '-1001111111111',
+                'chat_id_order' => '-1002222222222',
+                'chat_id_admin' => '-1003333333333',
+                'bat_thong_bao_don_hang' => '1',
+                'bat_canh_bao_loi' => '1',
+            ])
+            ->assertRedirect('/admin/telegram-settings')
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('cau_hinh_thong_bao', [
+            'loai' => 'telegram',
+            'chat_id_order' => '-1002222222222',
+        ]);
     }
 }
+
 

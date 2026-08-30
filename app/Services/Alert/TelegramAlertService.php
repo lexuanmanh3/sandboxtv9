@@ -2,7 +2,9 @@
 
 namespace App\Services\Alert;
 
+use App\Models\CauHinhThongBao;
 use App\Models\KetNoiNhaCungCap;
+
 use App\Models\LanGoiNhaCungCap;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +17,8 @@ final class TelegramAlertService
      */
     public function sendMessage(string $chatId, string $message, ?string $botToken = null): bool
     {
-        $token = $botToken ?: config('services.telegram.bot_token', env('TELEGRAM_BOT_TOKEN'));
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        $token = $botToken ?: $dbConfig->bot_token ?: config('services.telegram.bot_token', env('TELEGRAM_BOT_TOKEN'));
         if (!$token || !$chatId) {
             Log::warning('TelegramAlertService: Thiếu Bot Token hoặc ChatID để gửi cảnh báo.', [
                 'has_token' => (bool) $token,
@@ -55,15 +58,20 @@ final class TelegramAlertService
      */
     public function alertTransactionFailure(LanGoiNhaCungCap $lanGoi, string $reason, ?KetNoiNhaCungCap $connection = null): bool
     {
-        $connection ??= $lanGoi->ketNoi;
-        $config = $connection?->cau_hinh_canh_bao_loi ?? [];
-
-        // Kiểm tra xem NCC có bật cảnh báo lỗi không
-        if (empty($config['bat_canh_bao'])) {
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_canh_bao_loi) {
             return false;
         }
 
-        $chatId = $config['nhom_canh_bao_chat_id'] ?? null;
+        $connection ??= $lanGoi->ketNoi;
+        $config = $connection?->cau_hinh_canh_bao_loi ?? [];
+
+        // Kiểm tra xem NCC có tắt riêng không (nếu có cấu hình riêng ở NCC)
+        if (isset($config['bat_canh_bao']) && !$config['bat_canh_bao']) {
+            return false;
+        }
+
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -93,14 +101,19 @@ final class TelegramAlertService
      */
     public function alertSlowTransaction(LanGoiNhaCungCap $lanGoi, float $durationSeconds, int $thresholdSeconds, ?KetNoiNhaCungCap $connection = null): bool
     {
-        $connection ??= $lanGoi->ketNoi;
-        $config = $connection?->cau_hinh_canh_bao_loi ?? [];
-
-        if (empty($config['bat_canh_bao'])) {
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_canh_bao_xu_ly_cham) {
             return false;
         }
 
-        $chatId = $config['nhom_canh_bao_chat_id'] ?? null;
+        $connection ??= $lanGoi->ketNoi;
+        $config = $connection?->cau_hinh_canh_bao_loi ?? [];
+
+        if (isset($config['bat_canh_bao']) && !$config['bat_canh_bao']) {
+            return false;
+        }
+
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -124,8 +137,13 @@ final class TelegramAlertService
      */
     public function alertCircuitBreakerTriggered(KetNoiNhaCungCap $connection, int $consecutiveFailures, int $suspendSeconds): bool
     {
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_canh_bao_circuit_breaker) {
+            return false;
+        }
+
         $config = $connection->cau_hinh_canh_bao_loi ?? [];
-        $chatId = $config['nhom_canh_bao_chat_id'] ?? null;
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -149,8 +167,13 @@ final class TelegramAlertService
      */
     public function alertLowBalance(KetNoiNhaCungCap $connection, float $currentBalance, float $threshold): bool
     {
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_canh_bao_so_du_thap) {
+            return false;
+        }
+
         $config = $connection->cau_hinh_canh_bao_loi ?? [];
-        $chatId = $config['nhom_canh_bao_chat_id'] ?? null;
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -176,7 +199,12 @@ final class TelegramAlertService
      */
     public function alertOrderSuccess(\App\Models\DonHang $donHang, ?LanGoiNhaCungCap $lanGoi = null): bool
     {
-        $chatId = config('services.telegram.channel_order') ?: config('services.telegram.channel_alert');
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_thong_bao_don_hang) {
+            return false;
+        }
+
+        $chatId = $dbConfig->chat_id_order ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_order') ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -203,7 +231,12 @@ final class TelegramAlertService
      */
     public function alertManualReview(\App\Models\DonHang $donHang, string $reason): bool
     {
-        $chatId = config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_canh_bao_manual_review) {
+            return false;
+        }
+
+        $chatId = $dbConfig->chat_id_admin ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
@@ -227,7 +260,12 @@ final class TelegramAlertService
      */
     public function alertOrderRefunded(\App\Models\DonHang $donHang, string $reason, string $operator): bool
     {
-        $chatId = config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!$dbConfig->bat_thong_bao_hoan_tien) {
+            return false;
+        }
+
+        $chatId = $dbConfig->chat_id_admin ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
         if (!$chatId) {
             return false;
         }
