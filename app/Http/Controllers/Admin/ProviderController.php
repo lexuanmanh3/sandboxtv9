@@ -274,8 +274,10 @@ class ProviderController extends Controller
      */
     public function resetCircuitBreaker(NhaCungCap $provider): RedirectResponse
     {
-        if ($provider->ketNoi) {
-            \Illuminate\Support\Facades\Cache::forget("circuit_breaker_fails_{$provider->ketNoi->id}");
+        $conn = $provider->ketNoi()->first();
+        if ($conn) {
+            \Illuminate\Support\Facades\Cache::forget("circuit_breaker_fails_{$conn->id}");
+            \Illuminate\Support\Facades\Cache::forget("circuit_breaker_tripped_{$conn->id}");
         }
         return back()->with('success', "Đã đặt lại (reset) bộ đếm lỗi Circuit Breaker cho nhà cung cấp {$provider->ten_ncc}.");
     }
