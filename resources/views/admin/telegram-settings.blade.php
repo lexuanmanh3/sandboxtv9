@@ -20,6 +20,8 @@
       padding-bottom: 16px;
       margin-bottom: 22px;
       border-bottom: 1px solid var(--admin-slate-100);
+      flex-wrap: wrap;
+      gap: 12px;
     }
     .tele-card__title-group {
       display: flex;
@@ -78,11 +80,6 @@
       color: #ef4444;
       margin-left: 2px;
     }
-    .tele-input-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
     .tele-input {
       width: 100%;
       height: 42px;
@@ -101,15 +98,28 @@
       outline: none;
       box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
     }
-    .tele-input::placeholder {
-      color: #94a3b8;
+    .tele-select {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13.5px;
+      color: var(--admin-slate-800);
+      background: #ffffff;
+      transition: all 0.2s ease;
+    }
+    .tele-select:focus {
+      border-color: #0284c7;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
     }
     .tele-btn-test {
-      height: 42px;
-      padding: 0 16px;
-      font-size: 13px;
+      height: 36px;
+      padding: 0 14px;
+      font-size: 12.5px;
       font-weight: 600;
-      border-radius: 8px;
+      border-radius: 6px;
       border: 1px solid #cbd5e1;
       background: #ffffff;
       color: var(--admin-slate-700);
@@ -139,26 +149,63 @@
       line-height: 16px;
     }
 
-    /* Grid for Notification Toggles */
-    .tele-toggle-grid {
+    /* Channel Table */
+    .tele-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--admin-slate-200);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .tele-table th {
+      background: #f8fafc;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--admin-slate-700);
+      text-align: left;
+      border-bottom: 1px solid var(--admin-slate-200);
+    }
+    .tele-table td {
+      padding: 12px 16px;
+      font-size: 13.5px;
+      color: var(--admin-slate-800);
+      border-bottom: 1px solid var(--admin-slate-100);
+      vertical-align: middle;
+    }
+    .tele-table tr:last-child td {
+      border-bottom: none;
+    }
+    .tele-table tr:hover td {
+      background: #f8fafc;
+    }
+
+    /* Event Notification Cards */
+    .tele-event-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 16px;
     }
-    .tele-toggle-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      padding: 16px 18px;
+    .tele-event-card {
       border: 1px solid var(--admin-slate-200);
       border-radius: 10px;
+      padding: 18px 20px;
       background: #f8fafc;
-      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
       transition: all 0.15s ease;
     }
-    .tele-toggle-item:hover {
-      background: #f1f5f9;
+    .tele-event-card:hover {
+      background: #ffffff;
       border-color: #cbd5e1;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .tele-event-card__top {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
     }
     .tele-toggle-switch {
       position: relative;
@@ -200,20 +247,33 @@
     input:checked + .tele-slider:before {
       transform: translateX(20px);
     }
-    .tele-toggle-info {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
+    .tele-event-info {
+      flex: 1;
     }
-    .tele-toggle-info strong {
+    .tele-event-info strong {
+      display: block;
       font-size: 14px;
-      font-weight: 600;
-      color: var(--admin-slate-800);
+      font-weight: 700;
+      color: var(--admin-slate-900);
+      margin-bottom: 2px;
     }
-    .tele-toggle-info span {
+    .tele-event-info span {
+      display: block;
       font-size: 12.5px;
       color: var(--admin-slate-500);
       line-height: 18px;
+    }
+    .tele-event-channel-picker {
+      padding-top: 10px;
+      border-top: 1px dashed var(--admin-slate-200);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tele-event-channel-picker label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--admin-slate-600);
     }
 
     /* Help Callout */
@@ -295,6 +355,8 @@
   @php
     $currentUser = auth()->user();
     $canEdit = $currentUser && ($currentUser->vai_tro === 'admin' || $currentUser->loai_tai_khoan === 'admin' || $currentUser->coQuyen('telegram_setting.update'));
+    $channelsList = $channels ?? [];
+    $eventMap = $eventChannels ?? [];
   @endphp
 
   <section class="account-page">
@@ -308,7 +370,7 @@
           <strong>Thông báo Telegram</strong>
         </nav>
         <h1>Cấu hình Thông báo Telegram</h1>
-        <p>Quản lý kết nối Bot Telegram, phân nhóm nhận tin và bật/tắt từng loại thông báo tự động.</p>
+        <p>Quản lý đa kênh nhận tin Telegram, phân luồng sự kiện cảnh báo và phân công người phụ trách.</p>
       </div>
 
       <div class="account-actions">
@@ -333,22 +395,25 @@
       </section>
     @endif
 
-    <form method="POST" action="{{ route('admin.telegram-settings.update') }}">
+    <form method="POST" action="{{ route('admin.telegram-settings.update') }}" id="telegramSettingsForm">
       @csrf
       @method('PUT')
 
-      {{-- CARD 1: CẤU HÌNH BOT & KÊNH NHẬN TIN --}}
+      {{-- Hidden input containing dynamic JSON channels list --}}
+      <input type="hidden" name="danh_sach_kenh" id="danhSachKenhJson" value="{{ json_encode($channelsList) }}">
+
+      {{-- CARD 1: BOT TOKEN --}}
       <section class="tele-card">
         <div class="tele-card__header">
           <div class="tele-card__title-group">
             <div class="tele-card__title-row">
-              <h2>Kết nối Bot Telegram &amp; Kênh nhận tin</h2>
+              <h2>1. Kết nối Telegram Bot Token</h2>
               <span class="tele-badge tele-badge--blue">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 Bảo mật
               </span>
             </div>
-            <p class="tele-card__desc">Nhập mã Token của Bot và các Chat ID của nhóm nhận thông báo theo từng mục đích.</p>
+            <p class="tele-card__desc">Nhập mã Token chung của Bot Telegram hệ thống dùng để gửi tất cả các thông báo.</p>
           </div>
         </div>
 
@@ -362,194 +427,213 @@
             id="bot_token"
             name="bot_token"
             value="{{ old('bot_token', $config->bot_token) }}"
-            placeholder="Ví dụ: 7123456789:AAFn_abcXYZ1234567890abcdef"
+            placeholder="Ví dụ: 8815830057:AAEVbFQtJXAofwJhTQaWuS273SfZmYUgxQ4"
             autocomplete="off"
             {{ $canEdit ? '' : 'disabled' }}
           >
           <span class="tele-hint">Lấy từ <code>@BotFather</code> trên Telegram khi tạo bot mới.</span>
         </div>
-
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 22px;">
-          {{-- Kênh 1: Kỹ thuật & Lỗi --}}
-          <div class="tele-form-group">
-            <label class="tele-label" for="chat_id_alert">
-              <span>Nhóm Cảnh báo Lỗi &amp; Kỹ thuật</span>
-              <span class="tele-badge tele-badge--amber">Kỹ thuật</span>
-            </label>
-            <div class="tele-input-row">
-              <input
-                class="tele-input"
-                type="text"
-                id="chat_id_alert"
-                name="chat_id_alert"
-                value="{{ old('chat_id_alert', $config->chat_id_alert) }}"
-                placeholder="Ví dụ: -1001234567890"
-                {{ $canEdit ? '' : 'disabled' }}
-              >
-              <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_alert', 'Nhóm Lỗi &amp; Kỹ thuật')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                <span>Test</span>
-              </button>
-            </div>
-            <span class="tele-hint">Nhận tin: Lỗi NCC, Circuit Breaker, Xử lý chậm, Số dư NCC thấp.</span>
-          </div>
-
-          {{-- Kênh 2: Đơn hàng thành công --}}
-          <div class="tele-form-group">
-            <label class="tele-label" for="chat_id_order">
-              <span>Nhóm Đơn hàng Thành công</span>
-              <span class="tele-badge tele-badge--green">Kinh doanh</span>
-            </label>
-            <div class="tele-input-row">
-              <input
-                class="tele-input"
-                type="text"
-                id="chat_id_order"
-                name="chat_id_order"
-                value="{{ old('chat_id_order', $config->chat_id_order) }}"
-                placeholder="Ví dụ: -1001234567891"
-                {{ $canEdit ? '' : 'disabled' }}
-              >
-              <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_order', 'Nhóm Đơn hàng Thành công')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                <span>Test</span>
-              </button>
-            </div>
-            <span class="tele-hint">Nhận tin: Mỗi khi có khách nạp tiền thành công.</span>
-          </div>
-
-          {{-- Kênh 3: Quản trị & Hoàn tiền --}}
-          <div class="tele-form-group">
-            <label class="tele-label" for="chat_id_admin">
-              <span>Nhóm Quản trị &amp; Hoàn tiền</span>
-              <span class="tele-badge tele-badge--purple">Kế toán/Admin</span>
-            </label>
-            <div class="tele-input-row">
-              <input
-                class="tele-input"
-                type="text"
-                id="chat_id_admin"
-                name="chat_id_admin"
-                value="{{ old('chat_id_admin', $config->chat_id_admin) }}"
-                placeholder="Ví dụ: -1001234567892"
-                {{ $canEdit ? '' : 'disabled' }}
-              >
-              <button class="tele-btn-test" type="button" onclick="testChatId('chat_id_admin', 'Nhóm Quản trị &amp; Hoàn tiền')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                <span>Test</span>
-              </button>
-            </div>
-            <span class="tele-hint">Nhận tin: Hoàn tiền đơn hàng, Đơn cần đối soát thủ công.</span>
-          </div>
-        </div>
       </section>
 
-      {{-- CARD 2: BẬT / TẮT TỪNG LOẠI THÔNG BÁO --}}
+      {{-- CARD 2: QUẢN LÝ DANH SÁCH NHÓM & KÊNH TELEGRAM --}}
       <section class="tele-card">
         <div class="tele-card__header">
           <div class="tele-card__title-group">
-            <h2>Bật / Tắt Từng Loại Thông Báo</h2>
-            <p class="tele-card__desc">Bật hoặc tắt các sự kiện bạn muốn bot Telegram tự động gửi cảnh báo.</p>
+            <div class="tele-card__title-row">
+              <h2>2. Quản lý Danh sách Nhóm &amp; Kênh Telegram</h2>
+              <span class="tele-badge tele-badge--green">Đa Kênh</span>
+            </div>
+            <p class="tele-card__desc">Thêm không giới hạn các nhóm/kênh nhận tin để phân chia cho từng bộ phận, ca trực hoặc nhân viên.</p>
+          </div>
+
+          @if ($canEdit)
+            <button class="account-btn account-btn--secondary" type="button" onclick="openAddChannelModal()" style="font-size: 13px; height: 38px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Thêm nhóm nhận tin</span>
+            </button>
+          @endif
+        </div>
+
+        <table class="tele-table" id="channelsTable">
+          <thead>
+            <tr>
+              <th style="width: 28%;">Tên nhóm / Kênh</th>
+              <th style="width: 25%;">Chat ID</th>
+              <th style="width: 25%;">Ghi chú / Bộ phận</th>
+              <th style="width: 22%; text-align: right;">Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="channelsTableBody">
+            {{-- Rendered dynamically by Javascript --}}
+          </tbody>
+        </table>
+      </section>
+
+      {{-- CARD 3: BẬT / TẮT & PHÂN LUỒNG CẢNH BÁO CHO TỪNG LOẠI SỰ KIỆN --}}
+      <section class="tele-card">
+        <div class="tele-card__header">
+          <div class="tele-card__title-group">
+            <div class="tele-card__title-row">
+              <h2>3. Phân luồng Cảnh báo theo Từng Loại Sự Kiện</h2>
+              <span class="tele-badge tele-badge--purple">Định tuyến</span>
+            </div>
+            <p class="tele-card__desc">Bật/tắt và chọn chính xác nhóm Telegram sẽ nhận thông báo khi sự kiện đó xảy ra.</p>
           </div>
         </div>
 
-        <div class="tele-toggle-grid">
-          {{-- 1. Đơn hàng thành công --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_thong_bao_don_hang" value="1" {{ old('bat_thong_bao_don_hang', $config->bat_thong_bao_don_hang) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>🎉 Đơn hàng thành công</strong>
-              <span>Gửi thông báo khi đơn nạp tiền điện thoại hoàn tất thành công.</span>
+        <div class="tele-event-grid">
+          {{-- 1. Đóng cầu dao (Circuit Breaker) --}}
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_canh_bao_circuit_breaker" value="1" {{ old('bat_canh_bao_circuit_breaker', $config->bat_canh_bao_circuit_breaker) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>🚨 Tự ngắt kết nối (Circuit Breaker)</strong>
+                <span>Cảnh báo khi hệ thống tạm đóng cổng NCC do lỗi liên tiếp chạm ngưỡng.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_circuit_breaker">Nhóm nhận cảnh báo cầu dao:</label>
+              <select class="tele-select event-channel-select" id="event_circuit_breaker" name="cau_hinh_kenh_su_kien[circuit_breaker]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['circuit_breaker'] ?? ($config->chat_id_alert ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
-          {{-- 2. Cảnh báo lỗi NCC --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_loi" value="1" {{ old('bat_canh_bao_loi', $config->bat_canh_bao_loi) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>⚠️ Lỗi giao dịch nhà cung cấp</strong>
-              <span>Gửi cảnh báo khi NCC trả về mã lỗi thất bại dứt khoát.</span>
+          {{-- 2. Lỗi giao dịch NCC --}}
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_canh_bao_loi" value="1" {{ old('bat_canh_bao_loi', $config->bat_canh_bao_loi) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>⚠️ Lỗi giao dịch nhà cung cấp</strong>
+                <span>Cảnh báo khi NCC trả về mã lỗi thất bại dứt khoát hoặc từ chối nạp thẻ.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_transaction_failure">Nhóm nhận cảnh báo đơn lỗi:</label>
+              <select class="tele-select event-channel-select" id="event_transaction_failure" name="cau_hinh_kenh_su_kien[transaction_failure]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['transaction_failure'] ?? ($config->chat_id_alert ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
           {{-- 3. Xử lý chậm --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_xu_ly_cham" value="1" {{ old('bat_canh_bao_xu_ly_cham', $config->bat_canh_bao_xu_ly_cham) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>🐢 Giao dịch xử lý chậm</strong>
-              <span>Gửi cảnh báo khi thời gian kết nối NCC vượt quá ngưỡng cài đặt.</span>
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_canh_bao_xu_ly_cham" value="1" {{ old('bat_canh_bao_xu_ly_cham', $config->bat_canh_bao_xu_ly_cham) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>🐢 Giao dịch xử lý chậm</strong>
+                <span>Cảnh báo khi thời gian kết nối NCC vượt quá số giây cài đặt (ví dụ > 3s).</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_slow_transaction">Nhóm nhận cảnh báo xử lý chậm:</label>
+              <select class="tele-select event-channel-select" id="event_slow_transaction" name="cau_hinh_kenh_su_kien[slow_transaction]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['slow_transaction'] ?? ($config->chat_id_alert ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
-          {{-- 4. Circuit Breaker --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_circuit_breaker" value="1" {{ old('bat_canh_bao_circuit_breaker', $config->bat_canh_bao_circuit_breaker) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>🚨 Tự ngắt kết nối (Circuit Breaker)</strong>
-              <span>Gửi cảnh báo khi hệ thống tạm dừng kết nối NCC do lỗi liên tiếp.</span>
+          {{-- 4. Số dư NCC thấp --}}
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_canh_bao_so_du_thap" value="1" {{ old('bat_canh_bao_so_du_thap', $config->bat_canh_bao_so_du_thap) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>💰 Số dư nhà cung cấp thấp</strong>
+                <span>Cảnh báo khi số dư ví NCC xuống dưới ngưỡng tối thiểu để kịp nạp thêm.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_low_balance">Nhóm nhận cảnh báo số dư thấp:</label>
+              <select class="tele-select event-channel-select" id="event_low_balance" name="cau_hinh_kenh_su_kien[low_balance]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['low_balance'] ?? ($config->chat_id_alert ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
-          {{-- 5. Số dư NCC thấp --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_so_du_thap" value="1" {{ old('bat_canh_bao_so_du_thap', $config->bat_canh_bao_so_du_thap) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>💰 Số dư nhà cung cấp thấp</strong>
-              <span>Gửi cảnh báo khi số dư ví NCC xuống dưới ngưỡng tối thiểu.</span>
+          {{-- 5. Đơn hàng thành công --}}
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_thong_bao_don_hang" value="1" {{ old('bat_thong_bao_don_hang', $config->bat_thong_bao_don_hang) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>🎉 Đơn hàng nạp thành công</strong>
+                <span>Gửi thông báo khi đơn nạp tiền điện thoại hoàn tất thành công.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_order_success">Nhóm nhận thông báo đơn thành công:</label>
+              <select class="tele-select event-channel-select" id="event_order_success" name="cau_hinh_kenh_su_kien[order_success]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['order_success'] ?? ($config->chat_id_order ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
           {{-- 6. Manual Review --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_canh_bao_manual_review" value="1" {{ old('bat_canh_bao_manual_review', $config->bat_canh_bao_manual_review) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>🟡 Đơn cần đối soát thủ công</strong>
-              <span>Gửi nhắc nhở khi có đơn quá hạn chờ NCC cần Admin vào xử lý.</span>
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_canh_bao_manual_review" value="1" {{ old('bat_canh_bao_manual_review', $config->bat_canh_bao_manual_review) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>🟡 Đơn cần đối soát thủ công</strong>
+                <span>Gửi nhắc nhở khi có đơn quá hạn chờ NCC cần Admin vào xử lý.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_manual_review">Nhóm nhận thông báo đối soát:</label>
+              <select class="tele-select event-channel-select" id="event_manual_review" name="cau_hinh_kenh_su_kien[manual_review]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['manual_review'] ?? ($config->chat_id_admin ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
 
-          {{-- 7. Hoàn tiền --}}
-          <label class="tele-toggle-item">
-            <span class="tele-toggle-switch">
-              <input type="checkbox" name="bat_thong_bao_hoan_tien" value="1" {{ old('bat_thong_bao_hoan_tien', $config->bat_thong_bao_hoan_tien) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
-              <span class="tele-slider"></span>
-            </span>
-            <div class="tele-toggle-info">
-              <strong>🔄 Hoàn tiền đơn hàng</strong>
-              <span>Gửi thông báo khi Admin thực hiện hoàn tiền ví cho khách.</span>
+          {{-- 7. Hoàn tiền đơn hàng --}}
+          <div class="tele-event-card">
+            <div class="tele-event-card__top">
+              <label class="tele-toggle-switch">
+                <input type="checkbox" name="bat_thong_bao_hoan_tien" value="1" {{ old('bat_thong_bao_hoan_tien', $config->bat_thong_bao_hoan_tien) ? 'checked' : '' }} {{ $canEdit ? '' : 'disabled' }}>
+                <span class="tele-slider"></span>
+              </label>
+              <div class="tele-event-info">
+                <strong>🔄 Hoàn tiền đơn hàng</strong>
+                <span>Gửi thông báo khi Admin thực hiện hoàn tiền ví cho khách.</span>
+              </div>
             </div>
-          </label>
+            <div class="tele-event-channel-picker">
+              <label for="event_order_refunded">Nhóm nhận thông báo hoàn tiền:</label>
+              <select class="tele-select event-channel-select" id="event_order_refunded" name="cau_hinh_kenh_su_kien[order_refunded]" {{ $canEdit ? '' : 'disabled' }} data-selected="{{ $eventMap['order_refunded'] ?? ($config->chat_id_admin ?? '') }}">
+                {{-- Populated by JS --}}
+              </select>
+            </div>
+          </div>
         </div>
       </section>
 
-      {{-- CARD 3: HƯỚNG DẪN LẤY TOKEN & CHAT ID --}}
+      {{-- CARD 4: HƯỚNG DẪN LẤY TOKEN & CHAT ID --}}
       <section class="tele-help-callout" style="margin-bottom: 24px;">
         <h3>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           Hướng dẫn lấy Bot Token và Chat ID:
         </h3>
         <ol>
-          <li><strong>Lấy Bot Token:</strong> Mở Telegram tìm <code>@BotFather</code> &gt; Gõ lệnh <code>/newbot</code> &gt; Đặt tên bot &gt; Copy chuỗi <strong>HTTP API Token</strong> dán vào ô <em>Telegram Bot Token</em> ở trên.</li>
-          <li><strong>Lấy Chat ID cá nhân:</strong> Tìm bot bạn vừa tạo &gt; Bấm <code>/start</code>. Sau đó tìm bot <code>@userinfobot</code> &gt; Bấm <code>/start</code> để lấy <strong>Id</strong> của bạn.</li>
-          <li><strong>Lấy Chat ID Nhóm (Group):</strong> Tạo nhóm Telegram mới &gt; Thêm bot của bạn vào nhóm &gt; Cấp quyền Admin cho bot. Sau đó thêm bot <code>@RawDataBot</code> vào nhóm để xem Chat ID của nhóm (thường bắt đầu bằng <code>-100...</code>).</li>
+          <li><strong>Lấy Bot Token:</strong> Mở Telegram tìm <code>@BotFather</code> &gt; Gõ <code>/newbot</code> &gt; Đặt tên &gt; Copy chuỗi <strong>HTTP API Token</strong> dán vào ô <em>Telegram Bot Token</em> ở trên.</li>
+          <li><strong>Lấy Chat ID Nhóm (Group):</strong> Tạo nhóm Telegram mới &gt; Thêm con Bot của bạn vào nhóm &gt; Cấp quyền <strong>Admin</strong> cho bot trong nhóm &gt; Dùng bot <code>@RawDataBot</code> hoặc <code>@MissRose_bot</code> gõ <code>/id</code> để lấy ID nhóm (ví dụ: <code>-1005428010028</code> hoặc <code>-5428010028</code>).</li>
+          <li><strong>Lấy Chat ID Cá nhân:</strong> Mở chat với bot của bạn bấm <code>/start</code>. Sau đó tìm bot <code>@userinfobot</code> bấm <code>/start</code> để lấy <strong>Id</strong> của bạn.</li>
         </ol>
       </section>
 
@@ -574,6 +658,40 @@
     </form>
   </section>
 
+  {{-- MODAL THÊM / SỬA KÊNH TELEGRAM --}}
+  <div class="account-modal" id="channelModal" hidden>
+    <div class="account-modal__backdrop" onclick="closeChannelModal()"></div>
+    <section class="account-modal__dialog" style="max-width: 480px;" role="dialog" aria-modal="true">
+      <header class="account-modal__header">
+        <h2 id="channelModalTitle" style="font-size: 16px; font-weight: 700;">Thêm nhóm nhận tin Telegram</h2>
+        <button type="button" class="account-modal__close" onclick="closeChannelModal()">×</button>
+      </header>
+      <div class="account-modal__body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="modalChannelId">
+
+        <div>
+          <label class="tele-label" for="modalChannelName">Tên nhóm / Tên kênh <span class="req">*</span></label>
+          <input class="tele-input" type="text" id="modalChannelName" placeholder="Ví dụ: Nhóm Cầu dao Khẩn cấp, Nhóm CSKH...">
+        </div>
+
+        <div>
+          <label class="tele-label" for="modalChannelChatId">Chat ID Telegram <span class="req">*</span></label>
+          <input class="tele-input" type="text" id="modalChannelChatId" placeholder="Ví dụ: -1005428010028 hoặc 8815830057">
+          <span class="tele-hint">Đảm bảo bạn đã thêm Bot vào nhóm này trước khi lưu.</span>
+        </div>
+
+        <div>
+          <label class="tele-label" for="modalChannelNote">Ghi chú / Người phụ trách</label>
+          <input class="tele-input" type="text" id="modalChannelNote" placeholder="Ví dụ: Đội trực ca đêm, Kế toán đối soát...">
+        </div>
+      </div>
+      <footer class="account-modal__footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="account-btn account-btn--secondary" type="button" onclick="closeChannelModal()">Đóng</button>
+        <button class="account-btn account-btn--primary" type="button" onclick="saveChannelFromModal()">Xác nhận lưu</button>
+      </footer>
+    </section>
+  </div>
+
   {{-- TOAST NOTIFICATION CONTAINER --}}
   <div id="teleToast" class="tele-toast" role="alert">
     <span id="teleToastIcon" style="font-size: 16px;"></span>
@@ -583,6 +701,9 @@
 
 @push('scripts')
   <script>
+    // State of channels
+    let channelsData = @json($channelsList);
+
     function showToast(message, type = 'success') {
       const toast = document.getElementById('teleToast');
       const msg = document.getElementById('teleToastMsg');
@@ -597,22 +718,160 @@
       }, 4500);
     }
 
-    async function testChatId(inputId, channelName) {
+    function renderChannelsTable() {
+      const tbody = document.getElementById('channelsTableBody');
+      const jsonInput = document.getElementById('danhSachKenhJson');
+      if (!tbody) return;
+
+      jsonInput.value = JSON.stringify(channelsData);
+      tbody.innerHTML = '';
+
+      if (channelsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 24px;">Chưa có nhóm Telegram nào. Bấm "Thêm nhóm nhận tin" để tạo nhóm mới.</td></tr>`;
+        updateEventSelectors();
+        return;
+      }
+
+      channelsData.forEach((chan, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <strong style="color: #0f172a; font-size: 14px;">${escapeHtml(chan.ten_kenh)}</strong>
+          </td>
+          <td>
+            <code style="background: #f1f5f9; padding: 3px 7px; border-radius: 4px; font-weight: 600; color: #0369a1;">${escapeHtml(chan.chat_id)}</code>
+          </td>
+          <td>
+            <span style="color: #64748b; font-size: 13px;">${escapeHtml(chan.ghi_chu || '-')}</span>
+          </td>
+          <td style="text-align: right;">
+            <div style="display: inline-flex; gap: 6px; align-items: center;">
+              <button class="tele-btn-test" type="button" onclick="testCustomChannel('${escapeHtml(chan.chat_id)}', '${escapeHtml(chan.ten_kenh)}')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                <span>Test</span>
+              </button>
+              <button type="button" class="tele-btn-test" onclick="editChannel(${idx})" style="padding: 0 10px;" title="Chỉnh sửa">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button type="button" class="tele-btn-test" onclick="deleteChannel(${idx})" style="padding: 0 10px; color: #ef4444; border-color: #fecaca;" title="Xóa">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      updateEventSelectors();
+    }
+
+    function updateEventSelectors() {
+      document.querySelectorAll('.event-channel-select').forEach((sel) => {
+        const currentVal = sel.value || sel.dataset.selected || '';
+        sel.innerHTML = '<option value="">-- Mặc định (Nhóm đầu tiên / .env) --</option>';
+
+        channelsData.forEach((chan) => {
+          const opt = document.createElement('option');
+          opt.value = chan.chat_id;
+          opt.textContent = `${chan.ten_kenh} (${chan.chat_id})`;
+          if (chan.chat_id === currentVal) {
+            opt.selected = true;
+          }
+          sel.appendChild(opt);
+        });
+      });
+    }
+
+    function openAddChannelModal() {
+      document.getElementById('channelModalTitle').textContent = 'Thêm nhóm nhận tin Telegram';
+      document.getElementById('modalChannelId').value = '';
+      document.getElementById('modalChannelName').value = '';
+      document.getElementById('modalChannelChatId').value = '';
+      document.getElementById('modalChannelNote').value = '';
+
+      const modal = document.getElementById('channelModal');
+      modal.hidden = false;
+      document.body.classList.add('account-modal-open');
+    }
+
+    function editChannel(idx) {
+      const chan = channelsData[idx];
+      if (!chan) return;
+
+      document.getElementById('channelModalTitle').textContent = 'Chỉnh sửa nhóm Telegram';
+      document.getElementById('modalChannelId').value = idx;
+      document.getElementById('modalChannelName').value = chan.ten_kenh;
+      document.getElementById('modalChannelChatId').value = chan.chat_id;
+      document.getElementById('modalChannelNote').value = chan.ghi_chu || '';
+
+      const modal = document.getElementById('channelModal');
+      modal.hidden = false;
+      document.body.classList.add('account-modal-open');
+    }
+
+    function closeChannelModal() {
+      const modal = document.getElementById('channelModal');
+      modal.hidden = true;
+      document.body.classList.remove('account-modal-open');
+    }
+
+    function saveChannelFromModal() {
+      const name = (document.getElementById('modalChannelName').value || '').trim();
+      const chatId = (document.getElementById('modalChannelChatId').value || '').trim();
+      const note = (document.getElementById('modalChannelNote').value || '').trim();
+      const idxStr = document.getElementById('modalChannelId').value;
+
+      if (!name) {
+        showToast('Vui lòng nhập Tên nhóm nhận tin!', 'error');
+        document.getElementById('modalChannelName').focus();
+        return;
+      }
+      if (!chatId) {
+        showToast('Vui lòng nhập Chat ID Telegram!', 'error');
+        document.getElementById('modalChannelChatId').focus();
+        return;
+      }
+
+      if (idxStr !== '') {
+        const idx = parseInt(idxStr, 10);
+        channelsData[idx] = {
+          ...channelsData[idx],
+          ten_kenh: name,
+          chat_id: chatId,
+          ghi_chu: note
+        };
+        showToast('Đã cập nhật nhóm Telegram thành công!', 'success');
+      } else {
+        channelsData.push({
+          id: 'chan_' + Date.now(),
+          ten_kenh: name,
+          chat_id: chatId,
+          ghi_chu: note
+        });
+        showToast('Đã thêm nhóm Telegram mới!', 'success');
+      }
+
+      closeChannelModal();
+      renderChannelsTable();
+    }
+
+    function deleteChannel(idx) {
+      const chan = channelsData[idx];
+      if (!chan) return;
+      if (confirm(`Bạn có chắc muốn xóa nhóm "${chan.ten_kenh}"?`)) {
+        channelsData.splice(idx, 1);
+        renderChannelsTable();
+        showToast('Đã xóa nhóm Telegram.', 'success');
+      }
+    }
+
+    async function testCustomChannel(chatId, channelName) {
       const botTokenInput = document.getElementById('bot_token');
       const botToken = (botTokenInput?.value || '').trim();
 
       if (!botToken) {
-        showToast('Vui lòng nhập Telegram Bot Token ở ô trên trước khi bấm Test!', 'error');
+        showToast('Vui lòng nhập Telegram Bot Token ở mục 1 trước khi bấm Test!', 'error');
         botTokenInput?.focus();
-        return;
-      }
-
-      const input = document.getElementById(inputId);
-      const chatId = (input?.value || '').trim();
-
-      if (!chatId) {
-        showToast('Vui lòng nhập Chat ID vào ô trước khi bấm gửi thử nghiệm.', 'error');
-        input?.focus();
         return;
       }
 
@@ -650,6 +909,22 @@
         btn.innerHTML = originalHtml;
       }
     }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Initialize table on DOM load
+    document.addEventListener('DOMContentLoaded', () => {
+      renderChannelsTable();
+    });
   </script>
 @endpush
+
 

@@ -416,15 +416,11 @@
                 <label>
                   <span>Chọn nhóm nhận thông báo</span>
                   <select name="nhom_canh_bao_chat_id" id="providerTelegramChatIdSelect">
-                    <option value="">-- Mặc định (Nhóm Lỗi &amp; Kỹ thuật hệ thống) --</option>
-                    @if (!empty($telegramConfig->chat_id_alert))
-                      <option value="{{ $telegramConfig->chat_id_alert }}">Nhóm Cảnh báo Lỗi &amp; Kỹ thuật ({{ $telegramConfig->chat_id_alert }})</option>
-                    @endif
-                    @if (!empty($telegramConfig->chat_id_order))
-                      <option value="{{ $telegramConfig->chat_id_order }}">Nhóm Đơn hàng Thành công ({{ $telegramConfig->chat_id_order }})</option>
-                    @endif
-                    @if (!empty($telegramConfig->chat_id_admin))
-                      <option value="{{ $telegramConfig->chat_id_admin }}">Nhóm Quản trị &amp; Hoàn tiền ({{ $telegramConfig->chat_id_admin }})</option>
+                    <option value="">-- Mặc định (Theo cấu hình hệ thống) --</option>
+                    @if (isset($telegramConfig))
+                      @foreach ($telegramConfig->layDanhSachKenhHopLe() as $chan)
+                        <option value="{{ $chan['chat_id'] }}">{{ $chan['ten_kenh'] }} ({{ $chan['chat_id'] }})</option>
+                      @endforeach
                     @endif
                     <option value="__custom__">-- Tùy chỉnh Chat ID khác... --</option>
                   </select>

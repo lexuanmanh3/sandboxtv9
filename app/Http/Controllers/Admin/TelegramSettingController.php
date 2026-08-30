@@ -24,8 +24,10 @@ class TelegramSettingController extends Controller
     public function index(): View
     {
         $config = CauHinhThongBao::layCauHinhTelegram();
+        $channels = $config->layDanhSachKenhHopLe();
+        $eventChannels = $config->cau_hinh_kenh_su_kien ?? [];
 
-        return view('admin.telegram-settings', compact('config'));
+        return view('admin.telegram-settings', compact('config', 'channels', 'eventChannels'));
     }
 
     /**
@@ -38,6 +40,8 @@ class TelegramSettingController extends Controller
             'chat_id_alert' => ['nullable', 'string', 'max:100'],
             'chat_id_order' => ['nullable', 'string', 'max:100'],
             'chat_id_admin' => ['nullable', 'string', 'max:100'],
+            'danh_sach_kenh' => ['nullable'],
+            'cau_hinh_kenh_su_kien' => ['nullable', 'array'],
             'bat_thong_bao_don_hang' => ['nullable', 'boolean'],
             'bat_canh_bao_loi' => ['nullable', 'boolean'],
             'bat_canh_bao_xu_ly_cham' => ['nullable', 'boolean'],
@@ -47,6 +51,36 @@ class TelegramSettingController extends Controller
             'bat_thong_bao_hoan_tien' => ['nullable', 'boolean'],
         ]);
 
+        $rawChannels = $request->input('danh_sach_kenh');
+        $channels = [];
+        if (is_string($rawChannels)) {
+            $decoded = json_decode($rawChannels, true);
+            if (is_array($decoded)) {
+                $channels = $decoded;
+            }
+        } elseif (is_array($rawChannels)) {
+            $channels = $rawChannels;
+        }
+
+        $cleanChannels = [];
+        foreach ($channels as $c) {
+            $chatId = trim((string) ($c['chat_id'] ?? ''));
+            $tenKenh = trim((string) ($c['ten_kenh'] ?? ''));
+            if ($chatId !== '' && $tenKenh !== '') {
+                $cleanChannels[] = [
+                    'id' => trim((string) ($c['id'] ?? uniqid('chan_'))),
+                    'ten_kenh' => $tenKenh,
+                    'chat_id' => $chatId,
+                    'ghi_chu' => trim((string) ($c['ghi_chu'] ?? '')),
+                ];
+            }
+        }
+
+        $eventChannels = $request->input('cau_hinh_kenh_su_kien', []);
+        if (!is_array($eventChannels)) {
+            $eventChannels = [];
+        }
+
         $config = CauHinhThongBao::where('loai', 'telegram')->first() ?? new CauHinhThongBao(['loai' => 'telegram']);
         $before = $config->toArray();
 
@@ -55,6 +89,8 @@ class TelegramSettingController extends Controller
             'chat_id_alert' => trim((string) ($validated['chat_id_alert'] ?? '')),
             'chat_id_order' => trim((string) ($validated['chat_id_order'] ?? '')),
             'chat_id_admin' => trim((string) ($validated['chat_id_admin'] ?? '')),
+            'danh_sach_kenh' => $cleanChannels,
+            'cau_hinh_kenh_su_kien' => $eventChannels,
             'bat_thong_bao_don_hang' => $request->boolean('bat_thong_bao_don_hang'),
             'bat_canh_bao_loi' => $request->boolean('bat_canh_bao_loi'),
             'bat_canh_bao_xu_ly_cham' => $request->boolean('bat_canh_bao_xu_ly_cham'),

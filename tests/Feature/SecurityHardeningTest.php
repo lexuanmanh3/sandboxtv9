@@ -107,6 +107,49 @@ class SecurityHardeningTest extends TestCase
             'chat_id_order' => '-1002222222222',
         ]);
     }
+
+    public function test_admin_can_save_dynamic_channels_and_event_mappings(): void
+    {
+        $admin = User::create([
+            'ten_dang_nhap' => 'adm_dyn_' . uniqid(),
+            'email' => 'adm_dyn_' . uniqid() . '@example.com',
+            'password' => Hash::make('AdminPass@123'),
+            'loai_tai_khoan' => 'admin',
+            'trang_thai' => 'hoat_dong',
+            'tai_khoan_da_xac_thuc' => true,
+        ]);
+
+        $adminRole = VaiTro::where('ma_vai_tro', 'admin')->first();
+        if ($adminRole) {
+            $admin->vaiTro()->attach($adminRole->id, ['tao_luc' => now()]);
+        }
+
+        $channels = [
+            ['id' => 'chan_1', 'ten_kenh' => 'Nhóm Cầu Dao', 'chat_id' => '-1005555555555', 'ghi_chu' => 'Kỹ thuật'],
+            ['id' => 'chan_2', 'ten_kenh' => 'Nhóm Đơn Lỗi', 'chat_id' => '-1006666666666', 'ghi_chu' => 'Vận hành'],
+        ];
+
+        $eventMappings = [
+            'circuit_breaker' => '-1005555555555',
+            'transaction_failure' => '-1006666666666',
+        ];
+
+        $this->actingAs($admin)
+            ->put('/admin/telegram-settings', [
+                'bot_token' => '8815830057:AAEVbFQtJXAofwJhTQaWuS273SfZmYUgxQ4',
+                'danh_sach_kenh' => $channels,
+                'cau_hinh_kenh_su_kien' => $eventMappings,
+                'bat_canh_bao_circuit_breaker' => '1',
+                'bat_canh_bao_loi' => '1',
+            ])
+            ->assertRedirect('/admin/telegram-settings')
+            ->assertSessionHas('success');
+
+        $cfg = \App\Models\CauHinhThongBao::layCauHinhTelegram();
+        $this->assertEquals('-1005555555555', $cfg->layChatIdChoSuKien('circuit_breaker'));
+        $this->assertEquals('-1006666666666', $cfg->layChatIdChoSuKien('transaction_failure'));
+        $this->assertCount(2, $cfg->layDanhSachKenhHopLe());
+    }
 }
 
 

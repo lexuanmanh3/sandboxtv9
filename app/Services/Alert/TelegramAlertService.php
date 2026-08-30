@@ -71,7 +71,7 @@ final class TelegramAlertService
             return false;
         }
 
-        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->layChatIdChoSuKien('transaction_failure');
         if (!$chatId) {
             return false;
         }
@@ -113,7 +113,7 @@ final class TelegramAlertService
             return false;
         }
 
-        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->layChatIdChoSuKien('slow_transaction');
         if (!$chatId) {
             return false;
         }
@@ -143,7 +143,7 @@ final class TelegramAlertService
         }
 
         $config = $connection->cau_hinh_canh_bao_loi ?? [];
-        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->layChatIdChoSuKien('circuit_breaker');
         if (!$chatId) {
             return false;
         }
@@ -173,7 +173,7 @@ final class TelegramAlertService
         }
 
         $config = $connection->cau_hinh_canh_bao_loi ?? [];
-        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_alert');
+        $chatId = $config['nhom_canh_bao_chat_id'] ?: $dbConfig->layChatIdChoSuKien('low_balance');
         if (!$chatId) {
             return false;
         }
@@ -204,7 +204,7 @@ final class TelegramAlertService
             return false;
         }
 
-        $chatId = $dbConfig->chat_id_order ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_order') ?: config('services.telegram.channel_alert');
+        $chatId = $dbConfig->layChatIdChoSuKien('order_success');
         if (!$chatId) {
             return false;
         }
@@ -236,7 +236,7 @@ final class TelegramAlertService
             return false;
         }
 
-        $chatId = $dbConfig->chat_id_admin ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        $chatId = $dbConfig->layChatIdChoSuKien('manual_review');
         if (!$chatId) {
             return false;
         }
@@ -265,7 +265,7 @@ final class TelegramAlertService
             return false;
         }
 
-        $chatId = $dbConfig->chat_id_admin ?: $dbConfig->chat_id_alert ?: config('services.telegram.channel_admin') ?: config('services.telegram.channel_alert');
+        $chatId = $dbConfig->layChatIdChoSuKien('order_refunded');
         if (!$chatId) {
             return false;
         }
