@@ -42,6 +42,18 @@ class PermissionCacheService
             ->each(fn ($userId) => $this->forgetUser((int) $userId));
     }
 
+    public function clearAll(): void
+    {
+        try {
+            $userIds = User::pluck('id');
+            foreach ($userIds as $userId) {
+                $this->forgetUser((int) $userId);
+            }
+        } catch (\Throwable $e) {
+            // ignore if database table doesn't exist yet
+        }
+    }
+
     public function userKey(int $userId): string
     {
         return "user_permissions:{$userId}";

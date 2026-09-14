@@ -88,6 +88,11 @@ class UserAccountController extends Controller
         // Neu sau nay them/sua field tao tai khoan, bao tri whitelist va rule trong StoreUserAccountRequest.
         $validated = $request->validated();
 
+        $operator = auth()->user();
+        if ($validated['loai_tai_khoan'] === 'admin' && (! $operator || ! $this->isRootAdmin($operator))) {
+            abort(403, 'Chỉ Quản trị viên hệ thống mới có quyền tạo tài khoản Admin.');
+        }
+
         // NOTE: Tao password tu input da validate hoac sinh ngau nhien theo checkbox.
         // Can lam tai day de password luon co gia tri hop le truoc khi Hash::make.
         $createRandomPassword = (bool) ($validated['tao_mat_khau_ngau_nhien'] ?? false);
@@ -115,7 +120,10 @@ class UserAccountController extends Controller
 
             $this->syncRoles($user, $validated['vai_tro'] ?? []);
 
-            // TODO: Khi co bang audit log rieng, ghi log tao tai khoan tai day.
+            app(AuditService::class)->record('user.created', $user, null, [
+                'ten_dang_nhap' => $user->ten_dang_nhap,
+                'loai_tai_khoan' => $user->loai_tai_khoan,
+            ]);
         });
 
         return redirect()
@@ -133,13 +141,25 @@ class UserAccountController extends Controller
         // NOTE: Chi lay du lieu da qua UpdateUserAccountRequest de so dien thoai/password luon dung rule backend.
         // Bao tri cac rule sua tai khoan trong UpdateUserAccountRequest, khong doc request all/input de luu.
         $validated = $request->validated();
+        $operator = auth()->user();
 
         if ($this->isRootAdmin($account)) {
             return back()->withErrors(['account' => 'Không được sửa tài khoản admin gốc.']);
         }
 
-        if ($this->isCurrentUser($account) && ((bool) ($validated['bi_khoa'] ?? false) || $validated['trang_thai'] !== 'hoat_dong')) {
-            return back()->withErrors(['account' => 'Không được tự khóa chính tài khoản đang đăng nhập.']);
+        if ($this->isCurrentUser($account)) {
+            if ((bool) ($validated['bi_khoa'] ?? false) || $validated['trang_thai'] !== 'hoat_dong') {
+                return back()->withErrors(['account' => 'Không được tự khóa chính tài khoản đang đăng nhập.']);
+            }
+            if ($validated['loai_tai_khoan'] !== $account->loai_tai_khoan) {
+                return back()->withErrors(['account' => 'Không được tự thay đổi loại tài khoản của chính mình.']);
+            }
+        }
+
+        if ($validated['loai_tai_khoan'] === 'admin' && $account->loai_tai_khoan !== 'admin') {
+            if (! $operator || ! $this->isRootAdmin($operator)) {
+                abort(403, 'Chỉ Quản trị viên hệ thống mới có quyền gán loại tài khoản Admin.');
+            }
         }
 
         DB::transaction(function () use ($validated, $account) {
@@ -167,7 +187,11 @@ class UserAccountController extends Controller
 
             $this->syncRoles($account, $validated['vai_tro'] ?? []);
 
-            // TODO: Khi co bang audit log rieng, ghi log sua tai khoan tai day.
+            app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
+            app(AuditService::class)->record('user.updated', $account, null, [
+                'ten_dang_nhap' => $account->ten_dang_nhap,
+                'loai_tai_khoan' => $account->loai_tai_khoan,
+            ]);
         });
 
         return back()->with('success', 'Cập nhật tài khoản thành công.');
@@ -192,7 +216,8 @@ class UserAccountController extends Controller
             'bat_buoc_doi_mat_khau' => (bool) ($validated['bat_buoc_doi_mat_khau'] ?? false),
         ]);
 
-        // TODO: Khi co bang audit log rieng, ghi log doi mat khau tai day.
+        app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
+        app(AuditService::class)->record('user.password.updated', $account, null, null);
 
         return back()->with('success', 'Đổi mật khẩu tài khoản thành công.');
     }
@@ -219,8 +244,6 @@ class UserAccountController extends Controller
         app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
         app(AuditService::class)->record('user.locked', $account, ['bi_khoa' => false], ['bi_khoa' => true]);
 
-        // TODO: Khi co bang audit log rieng, ghi log khoa tai khoan tai day.
-
         return back()->with('success', 'Khóa tài khoản thành công.');
     }
 
@@ -241,8 +264,6 @@ class UserAccountController extends Controller
 
         app(PermissionCacheService::class)->forgetUser((int) $account->getKey());
         app(AuditService::class)->record('user.unlocked', $account, ['bi_khoa' => true], ['bi_khoa' => false]);
-
-        // TODO: Khi co bang audit log rieng, ghi log mo khoa tai khoan tai day.
 
         return back()->with('success', 'Mở khóa tài khoản thành công.');
     }
@@ -326,15 +347,20 @@ class UserAccountController extends Controller
     {
         $operator = auth()->user();
 
+        // Chống tự thay đổi vai trò của chính mình
+        if ($operator && $this->isCurrentUser($user) && ! $this->isRootAdmin($operator)) {
+            abort(403, 'Không được tự thay đổi vai trò của chính mình.');
+        }
+
         // Kiểm tra quyền gán vai trò
-        if ($operator && !$operator->coQuyen('role.assign_permission') && !$this->isRootAdmin($operator)) {
+        if ($operator && ! $operator->coQuyen('role.assign_permission') && ! $this->isRootAdmin($operator)) {
             return;
         }
 
         // Không cho phép tài khoản không phải admin gốc gán vai trò admin
         $adminRole = VaiTro::where('ma_vai_tro', 'admin')->first();
         if ($adminRole && in_array((int) $adminRole->id, array_map('intval', $roleIds), true)) {
-            if (!$operator || !$this->isRootAdmin($operator)) {
+            if (! $operator || ! $this->isRootAdmin($operator)) {
                 abort(403, 'Chỉ Quản trị viên hệ thống mới có quyền cấp vai trò Admin.');
             }
         }
@@ -407,7 +433,7 @@ class UserAccountController extends Controller
      */
     private function isRootAdmin(User $user): bool
     {
-        return $user->ten_dang_nhap === 'admin' && $user->loai_tai_khoan === 'admin';
+        return $user->ten_dang_nhap === 'admin' && ($user->loai_tai_khoan === 'admin' || $user->coVaiTro('admin'));
     }
 
     /**

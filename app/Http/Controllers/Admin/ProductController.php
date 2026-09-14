@@ -335,7 +335,7 @@ class ProductController extends Controller
                         'ma_nha_mang_ncc' => $telcoKey,
                         'menh_gia_ncc' => $p->menh_gia,
                         'muc_uu_tien' => 100,
-                        'trang_thai' => 'ACTIVE',
+                        'trang_thai' => 'hoat_dong',
                         'dong_bo_luc' => now(),
                     ]
                 );
@@ -494,7 +494,7 @@ class ProductController extends Controller
                             'ten_san_pham' => $telcoName . ' ' . number_format($amount, 0, ',', '.') . 'đ',
                             'menh_gia' => $amount,
                             'don_vi' => 'VND',
-                            'trang_thai' => 'ACTIVE',
+                            'trang_thai' => 'hoat_dong',
                             'thu_tu' => (int) ($amount / 1000),
                         ]);
                         $createdProd++;
@@ -520,7 +520,7 @@ class ProductController extends Controller
                     'loai_thue_bao' => $telcoServiceType,
                     'menh_gia_ncc' => $amount,
                     'muc_uu_tien' => 100,
-                    'trang_thai' => 'ACTIVE',
+                    'trang_thai' => 'hoat_dong',
                     'du_lieu_mo_rong_json' => $item,
                     'dong_bo_luc' => now(),
                 ])->save();
@@ -542,7 +542,7 @@ class ProductController extends Controller
      */
     public function toggleStatus(SanPham $product): RedirectResponse
     {
-        $newStatus = ($product->trang_thai === 'ACTIVE' || $product->trang_thai === 'hoat_dong') ? 'tam_dung' : 'ACTIVE';
+        $newStatus = in_array($product->trang_thai, ['hoat_dong', 'ACTIVE']) ? 'tam_dung' : 'hoat_dong';
         $product->update(['trang_thai' => $newStatus]);
         return back()->with('success', "Đã đổi trạng thái sản phẩm '{$product->ten_san_pham}'.");
     }
@@ -570,7 +570,13 @@ class ProductController extends Controller
         }
 
         if ($trangThai = $request->query('trang_thai')) {
-            $query->where('trang_thai', $trangThai);
+            if (in_array($trangThai, ['hoat_dong', 'ACTIVE'])) {
+                $query->whereIn('trang_thai', ['hoat_dong', 'ACTIVE']);
+            } elseif (in_array($trangThai, ['tam_dung', 'INACTIVE'])) {
+                $query->whereIn('trang_thai', ['tam_dung', 'INACTIVE']);
+            } else {
+                $query->where('trang_thai', $trangThai);
+            }
         }
 
         return $query;
@@ -582,10 +588,11 @@ class ProductController extends Controller
     private function statuses(): array
     {
         return [
-            'ACTIVE' => 'Hoạt động',
             'hoat_dong' => 'Hoạt động',
-            'INACTIVE' => 'Tạm dừng',
             'tam_dung' => 'Tạm dừng',
+            'khoa' => 'Khóa',
+            'ACTIVE' => 'Hoạt động',
+            'INACTIVE' => 'Tạm dừng',
         ];
     }
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>@yield('title', 'VietFin - Cổng thanh toán viễn thông')</title>
+  <title>@yield('title', 'tv9tech - Cổng thanh toán viễn thông')</title>
   <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
   <link rel="stylesheet" href="{{ asset('frontend/css/home.css') }}">
   <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
@@ -16,13 +16,13 @@
     $currentUser = auth()->user();
     $canAccessFrontendHome = $currentUser?->coQuyen('frontend.home.access');
     $canAccessFrontendTopup = $currentUser?->coQuyen('frontend.topup.access');
-    $canAccessAdmin = $currentUser?->isAdmin() || $currentUser?->coMotTrongCacQuyen(['account.view', 'role.view', 'service_config.access']);
+    $canAccessAdmin = $currentUser?->hasAnyBackendAccess() ?? false;
   @endphp
 
   <header class="site-header">
     <nav class="topbar container">
-      <a class="brand" href="{{ $canAccessFrontendHome ? route('frontend.home') : '#' }}" aria-label="VietFin trang chủ">
-        <img src="{{ asset('frontend/img/TV9TECH_logo_transparent – Đã sửa.png') }}" alt="VietFin">
+      <a class="brand" href="{{ $canAccessFrontendHome ? route('frontend.home') : '#' }}" aria-label="tv9tech trang chủ">
+        <img src="{{ asset('backend/img/logo.png') }}" alt="tv9tech">
       </a>
 
       <button class="menu-toggle" type="button" aria-label="Mở menu" aria-expanded="false">
@@ -127,8 +127,8 @@
   <footer class="site-footer">
     <div class="footer-inner container">
       <div class="footer-brand">
-        <strong>VietFin</strong>
-        <p>© 2024 VietFin. Cổng thanh toán tài chính chuyên nghiệp.</p>
+        <strong>tv9tech</strong>
+        <p>© 2024 tv9tech. Cổng thanh toán tài chính chuyên nghiệp.</p>
       </div>
 
       <div class="footer-links">

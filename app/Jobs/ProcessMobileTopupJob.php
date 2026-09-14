@@ -27,7 +27,8 @@ class ProcessMobileTopupJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 1;
+    public int $timeout = 60;
 
     public function __construct(public int $donHangId) {}
 
@@ -45,7 +46,7 @@ class ProcessMobileTopupJob implements ShouldQueue
     ): void {
         $donHang = DB::transaction(function () use ($state) {
             $order = DonHang::query()->lockForUpdate()->findOrFail($this->donHangId);
-            if (in_array(strtoupper($order->trang_thai_don_hang), ['SUCCESS', 'PROVIDER_PENDING', 'MANUAL_REVIEW'], true)) {
+            if (in_array(strtoupper($order->trang_thai_don_hang), ['SUCCESS', 'PROVIDER_PENDING', 'MANUAL_REVIEW', 'REFUND_PENDING', 'REFUNDED', 'FAILED'], true)) {
                 return null;
             }
             if (strtoupper($order->trang_thai_don_hang) === 'QUEUED') {
@@ -55,6 +56,29 @@ class ProcessMobileTopupJob implements ShouldQueue
             return $order;
         });
         if (!$donHang) return;
+
+        // Chống nạp trùng khi worker trước bị timeout/crash giữa chừng:
+        // Nếu đã có lần gọi CHARGING đang PROCESSING, tuyệt đối không tạo partner_ref_id mới
+        $inFlightCall = $donHang->lanGoiNhaCungCap()
+            ->where('loai_yeu_cau', 'CHARGING')
+            ->where('trang_thai', 'PROCESSING')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($inFlightCall) {
+            DB::transaction(function () use ($donHang, $inFlightCall, $state) {
+                $order = DonHang::query()->lockForUpdate()->findOrFail($donHang->id);
+                if ($order->trang_thai_don_hang !== TrangThaiDonHang::PROVIDER_PENDING->value) {
+                    $state->chuyen($order, TrangThaiDonHang::PROVIDER_PENDING, 'Phát hiện yêu cầu nạp đang xử lý dở dang, chuyển sang tra cứu trạng thái');
+                }
+                $inFlightCall->update([
+                    'trang_thai' => 'UNKNOWN_OR_PENDING',
+                    'ket_qua_xac_dinh' => 'UNKNOWN_OR_PENDING',
+                ]);
+            });
+            CheckMobileTopupStatusJob::dispatch($inFlightCall->id)->delay(now()->addSeconds(10));
+            return;
+        }
 
         foreach ($routing->danhSach($donHang) as $mapping) {
             $lanGoi = LanGoiNhaCungCap::create([
@@ -128,6 +152,12 @@ class ProcessMobileTopupJob implements ShouldQueue
                         'gia_von_thuc_te' => $mapping->gia_nhap,
                         'hoan_thanh_luc' => now()
                     ]);
+
+                    // Xử lý B2B: Chuyển khoản giữ sang công nợ và tạo outbox webhook
+                    if ($order->dai_ly_api_id) {
+                        app(\App\Services\DaiLyApi\B2bCreditService::class)->chotCongNoThanhCong($order);
+                        app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.success');
+                    }
                 } elseif ($ketQua->ketQua === KetQuaNhaCungCap::UNKNOWN_OR_PENDING) {
                     $state->chuyen($order, TrangThaiDonHang::PROVIDER_PENDING, 'Kết quả NCC chưa xác định');
                     CheckMobileTopupStatusJob::dispatch($lanGoi->id)->delay(now()->addSeconds(10))->afterCommit();
@@ -158,8 +188,12 @@ class ProcessMobileTopupJob implements ShouldQueue
                 // Kiểm tra xem mã lỗi có thuộc danh sách bỏ qua không
                 $ignoredCodes = array_filter(array_map('trim', explode(',', (string) ($circuitConfig['ma_loi_bo_qua'] ?? ''))));
                 if (!$lanGoiFresh->ma_loi_ncc || !in_array((string) $lanGoiFresh->ma_loi_ncc, $ignoredCodes, true)) {
-                    $currentFailures = (int) Cache::get($cacheKey, 0) + 1;
-                    Cache::put($cacheKey, $currentFailures, now()->addHours(24));
+                    if (!Cache::has($cacheKey)) {
+                        Cache::add($cacheKey, 1, now()->addHours(24));
+                        $currentFailures = 1;
+                    } else {
+                        $currentFailures = (int) Cache::increment($cacheKey);
+                    }
 
                     // Kích hoạt Circuit Breaker nếu chạm hoặc vượt ngưỡng lỗi liên tiếp
                     if ($maxConsecutiveFailures > 0 && $currentFailures >= $maxConsecutiveFailures) {
@@ -168,6 +202,8 @@ class ProcessMobileTopupJob implements ShouldQueue
                         $mapping->nhaCungCap?->update(['trang_thai' => 'tam_dung']);
 
                         Cache::forget($cacheKey); // Reset đếm lỗi sau khi đã ngắt
+                        // Lưu cờ đánh dấu circuit breaker bị tripped
+                        Cache::put("circuit_breaker_tripped_{$mapping->ketNoi->id}", true, now()->addSeconds($suspendSeconds > 0 ? $suspendSeconds : 300));
                         $telegramAlert->alertCircuitBreakerTriggered($mapping->ketNoi, $currentFailures, $suspendSeconds);
                     }
                 }
@@ -176,7 +212,7 @@ class ProcessMobileTopupJob implements ShouldQueue
             if ($ketQua->ketQua !== KetQuaNhaCungCap::DEFINITIVE_FAILURE) return;
         }
 
-        DB::transaction(function () use ($donHang, $state, $viService) {
+        DB::transaction(function () use ($donHang, $state) {
             $order = DonHang::query()->lockForUpdate()->findOrFail($donHang->id);
             if (strtoupper($order->trang_thai_don_hang) === 'PROCESSING') {
                 $state->chuyen($order, TrangThaiDonHang::FAILED, 'Tất cả NCC đều thất bại chắc chắn');
@@ -184,14 +220,20 @@ class ProcessMobileTopupJob implements ShouldQueue
 
                 // Tự động hoàn tiền ví nếu đơn từ frontend và đã thanh toán
                 if ($order->nguon_don === 'frontend' && $order->nguoi_dung_id && (float) $order->gia_ban > 0) {
-                    $state->chuyen($order, TrangThaiDonHang::REFUND_PENDING, 'Bắt đầu hoàn tiền cho người dùng');
-                    $viService->hoanTien(
-                        (int) $order->nguoi_dung_id,
-                        (float) $order->gia_ban,
-                        $order,
-                        "Hoàn tiền đơn nạp điện thoại thất bại #{$order->ma_don_hang}"
+                    app(\App\Services\Topup\HoanTienDonHangService::class)->hoanTien(
+                        orderId: $order->id,
+                        actorType: 'system',
+                        actorId: null,
+                        actorName: 'worker',
+                        reason: 'Tất cả NCC đều thất bại chắc chắn',
+                        skipProviderCheck: true
                     );
-                    $state->chuyen($order, TrangThaiDonHang::REFUNDED, 'Hoàn tiền ví thành công', 'vi_service');
+                }
+
+                // Xử lý B2B: Giải phóng khoản giữ hạn mức và gửi webhook thông báo thất bại
+                if ($order->dai_ly_api_id) {
+                    app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($order, 'Tất cả NCC đều thất bại chắc chắn');
+                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.failed');
                 }
             }
         });

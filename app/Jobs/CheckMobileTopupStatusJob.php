@@ -52,7 +52,7 @@ class CheckMobileTopupStatusJob implements ShouldQueue
 
         // Luôn dùng đúng kết nối và partnerRefId của lần charging ban đầu.
         $result = $resolver->resolve($lanGoi->ketNoi)->kiemTraTrangThai($lanGoi->partner_ref_id);
-        DB::transaction(function () use ($lanGoi, $result, $state, $viService) {
+        DB::transaction(function () use ($lanGoi, $result, $state, $viService, $telegramAlert) {
             $call = LanGoiNhaCungCap::query()->lockForUpdate()->findOrFail($lanGoi->id);
             $order = DonHang::query()->lockForUpdate()->findOrFail($call->don_hang_id);
             $call->update([
@@ -67,36 +67,76 @@ class CheckMobileTopupStatusJob implements ShouldQueue
                 'kiem_tra_lai_luc' => now(),
             ]);
 
-            if ($result->ketQua === KetQuaNhaCungCap::SUCCESS && strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
-                $state->chuyen($order, TrangThaiDonHang::SUCCESS, 'Kiểm tra trạng thái xác nhận thành công');
-                $order->update([
-                    'nha_cung_cap_thanh_cong_id' => $call->nha_cung_cap_id,
-                    'lan_goi_thanh_cong_id' => $call->id,
-                    'hoan_thanh_luc' => now()
-                ]);
-                $telegramAlert->alertOrderSuccess($order->fresh(), $call);
+            if ($result->ketQua === KetQuaNhaCungCap::SUCCESS) {
+                if (strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
+                    $state->chuyen($order, TrangThaiDonHang::SUCCESS, 'Kiểm tra trạng thái xác nhận thành công');
+                    $order->update([
+                        'nha_cung_cap_thanh_cong_id' => $call->nha_cung_cap_id,
+                        'lan_goi_thanh_cong_id' => $call->id,
+                        'hoan_thanh_luc' => now()
+                    ]);
+
+                    // Xử lý B2B: Chốt công nợ và kích hoạt webhook outbox
+                    if ($order->dai_ly_api_id) {
+                        app(\App\Services\DaiLyApi\B2bCreditService::class)->chotCongNoThanhCong($order);
+                        app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.success');
+                    }
+
+                    // Gửi thông báo sau khi commit — lỗi thông báo không làm rollback trạng thái SUCCESS
+                    DB::afterCommit(function () use ($order, $call, $telegramAlert) {
+                        try {
+                            $telegramAlert->alertOrderSuccess($order->fresh() ?: $order, $call);
+                        } catch (\Throwable $te) {
+                            \Illuminate\Support\Facades\Log::warning("Lỗi gửi Telegram alert thành công đơn #{$order->id}: " . $te->getMessage());
+                        }
+                    });
+                } elseif (in_array(strtoupper($order->trang_thai_don_hang), ['REFUNDED', 'REFUND_PENDING'], true)) {
+                    // Sự kiện bất thường: NCC báo thành công sau khi đơn đã hoàn tiền
+                    // Không ghi đè SUCCESS, không trừ lại tiền ví người dùng, ghi nhận đối soát
+                    \Illuminate\Support\Facades\Log::emergency(
+                        "ĐỐI SOÁT BẤT THƯỜNG: NCC báo SUCCESS cho đơn đã hoàn tiền (#{$order->ma_don_hang}). Không ghi đè trạng thái, không trừ lại ví.", [
+                            'order_id' => $order->id,
+                            'call_id' => $call->id,
+                            'partner_ref' => $call->partner_ref_id,
+                            'ncc_tx_id' => $call->ma_giao_dich_ncc,
+                        ]
+                    );
+                    DB::afterCommit(function () use ($order, $telegramAlert) {
+                        try {
+                            $telegramAlert->alertManualReview(
+                                $order->fresh() ?: $order,
+                                "CẢNH BÁO ĐỐI SOÁT: NCC vừa xác nhận thành công đơn #{$order->ma_don_hang} nhưng đơn đã hoàn tiền trước đó. Cần kế toán đối soát thủ công với NCC!"
+                            );
+                        } catch (\Throwable) {}
+                    });
+                }
             } elseif ($result->ketQua === KetQuaNhaCungCap::DEFINITIVE_FAILURE && strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
                 $state->chuyen($order, TrangThaiDonHang::FAILED, 'Kiểm tra trạng thái xác nhận thất bại cuối');
                 $order->update(['that_bai_luc' => now()]);
 
-                // Tự động hoàn tiền ví nếu đơn từ frontend và đã trừ tiền
+                // Tự động hoàn tiền ví qua unified HoanTienDonHangService
                 if ($order->nguon_don === 'frontend' && $order->nguoi_dung_id && (float) $order->gia_ban > 0) {
-                    $state->chuyen($order, TrangThaiDonHang::REFUND_PENDING, 'Tự động hoàn tiền cho người dùng do đơn thất bại');
-                    $viService->hoanTien(
-                        $order->nguoi_dung_id,
-                        (float) $order->gia_ban,
-                        $order,
-                        "Hoàn tiền đơn hàng #{$order->ma_don_hang} do NCC từ chối"
+                    app(\App\Services\Topup\HoanTienDonHangService::class)->hoanTien(
+                        orderId: $order->id,
+                        actorType: 'system',
+                        actorId: null,
+                        actorName: 'status_checker',
+                        reason: "Hoàn tiền tự động do NCC từ chối (#{$order->ma_don_hang})",
+                        skipProviderCheck: true
                     );
-                    $state->chuyen($order, TrangThaiDonHang::REFUNDED, 'Hoàn tiền ví thành công');
-                    $order->update(['trang_thai_thanh_toan' => 'REFUNDED']);
+                }
+
+                // Xử lý B2B: Giải phóng khoản giữ và gửi webhook thất bại
+                if ($order->dai_ly_api_id) {
+                    app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($order, "Hoàn tiền tự động do NCC từ chối (#{$order->ma_don_hang})");
+                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.failed');
                 }
             }
         });
 
         if ($result->ketQua === KetQuaNhaCungCap::UNKNOWN_OR_PENDING) {
             if ($this->attempts() >= $maxAttempts) {
-                DB::transaction(function () use ($lanGoi, $state, $viService, $actionOnTimeout, $maxAttempts, $telegramAlert) {
+                DB::transaction(function () use ($lanGoi, $state, $actionOnTimeout, $maxAttempts, $telegramAlert) {
                     $order = DonHang::query()->lockForUpdate()->findOrFail($lanGoi->don_hang_id);
                     if (strtoupper($order->trang_thai_don_hang) === 'PROVIDER_PENDING') {
                         if ($actionOnTimeout === 'TU_DONG_HOAN_TIEN') {
@@ -104,19 +144,30 @@ class CheckMobileTopupStatusJob implements ShouldQueue
                             $order->update(['that_bai_luc' => now()]);
 
                             if ($order->nguon_don === 'frontend' && $order->nguoi_dung_id && (float) $order->gia_ban > 0) {
-                                $state->chuyen($order, TrangThaiDonHang::REFUND_PENDING, 'Tự động hoàn tiền SLA cho người dùng');
-                                $viService->hoanTien(
-                                    $order->nguoi_dung_id,
-                                    (float) $order->gia_ban,
-                                    $order,
-                                    "Hoàn tiền đơn hàng #{$order->ma_don_hang} do quá thời hạn chờ NCC"
+                                app(\App\Services\Topup\HoanTienDonHangService::class)->hoanTien(
+                                    orderId: $order->id,
+                                    actorType: 'system',
+                                    actorId: null,
+                                    actorName: 'sla_timeout',
+                                    reason: "Hoàn tiền tự động do quá thời hạn chờ NCC (#{$order->ma_don_hang})",
+                                    skipProviderCheck: true
                                 );
-                                $state->chuyen($order, TrangThaiDonHang::REFUNDED, 'Hoàn tiền ví thành công');
-                                $order->update(['trang_thai_thanh_toan' => 'REFUNDED']);
+                            }
+
+                            // Xử lý B2B: Giải phóng khoản giữ và gửi webhook thất bại
+                            if ($order->dai_ly_api_id) {
+                                app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($order, "Quá thời hạn kiểm tra NCC (SLA Timeout)");
+                                app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.failed');
                             }
                         } else {
                             $state->chuyen($order, TrangThaiDonHang::MANUAL_REVIEW, "Hết {$maxAttempts} lần kiểm tra nhưng kết quả vẫn chưa xác định, chuyển Admin duyệt");
-                            $telegramAlert->alertManualReview($order->fresh(), "Hết {$maxAttempts} lần kiểm tra nhưng kết quả vẫn chưa xác định, chuyển Admin đối soát");
+                            DB::afterCommit(function () use ($order, $telegramAlert, $maxAttempts) {
+                                try {
+                                    $telegramAlert->alertManualReview($order->fresh() ?: $order, "Hết {$maxAttempts} lần kiểm tra nhưng kết quả vẫn chưa xác định, chuyển Admin đối soát");
+                                } catch (\Throwable $te) {
+                                    \Illuminate\Support\Facades\Log::warning("Lỗi gửi Telegram alert đối soát đơn #{$order->id}: " . $te->getMessage());
+                                }
+                            });
                         }
                     }
                 });

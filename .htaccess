@@ -5,13 +5,18 @@
 
     RewriteEngine On
 
-    # Chặn truy cập trực tiếp các file/thư mục nhạy cảm
+    # Chặn truy cập trực tiếp các file/thư mục nhạy cảm và file nén/sao lưu
     RewriteRule ^(\.env|\.git|composer\.(json|lock)|package\.(json|lock)|webpack\.mix\.js|phpunit\.xml|artisan) - [F,L]
     RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor)(/.*)?$ - [F,L]
+    RewriteRule \.(zip|bak|old|sql|tar|gz|7z|rar|env.*)$ - [F,L]
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Chuyển hướng bỏ hoàn toàn chữ public trong URL nếu request trực tiếp chứa /public
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\s+([^?\s]*)/public(?:/([^\s?]*))? [NC]
+    RewriteRule ^ %1/%2 [R=301,L,NE]
 
     # Phục vụ file tĩnh từ thư mục public/ nếu tồn tại
     RewriteCond %{REQUEST_FILENAME} !-f

@@ -152,4 +152,19 @@ class DonHang extends Model
     {
         return $this->belongsTo(NhaCungCap::class, 'nha_cung_cap_thanh_cong_id');
     }
+
+    public function khoanGiuHanMuc()
+    {
+        return $this->hasOne(KhoanGiuHanMuc::class, 'don_hang_id');
+    }
+
+    public function soPhatSinhCongNo()
+    {
+        return $this->hasMany(SoPhatSinhCongNo::class, 'don_hang_id');
+    }
+
+    public function webhookOutbox()
+    {
+        return $this->hasMany(WebhookOutbox::class, 'don_hang_id');
+    }
 }

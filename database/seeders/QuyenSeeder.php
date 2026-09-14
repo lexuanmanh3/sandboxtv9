@@ -4,14 +4,16 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use App\Services\Authorization\PermissionCacheService;
 
 class QuyenSeeder extends Seeder
 {
     public function run(): void
     {
-        // Cây quyền bên dưới chỉ phục vụ quyền truy cập trang/module.
+        // Cây quyền bên dưới phục vụ quyền truy cập trang/module và các action chi tiết.
         // Node dạng page.*, backend.*, frontend.* là thư mục để phân tầng giao diện.
-        // Node dạng *.access là quyền thật được middleware dùng để cho phép vào trang.
+        // Node dạng *.access là quyền module/trang.
+        // Node dạng *.* (view, create, update, delete, v.v.) là quyền hành động chi tiết.
         $accessTree = [
             [
                 'ma_quyen' => 'page.root',
@@ -20,28 +22,42 @@ class QuyenSeeder extends Seeder
                 'thu_tu' => 1,
                 'children' => [
                     [
-                        'ma_quyen' => 'backend.root',
-                        'ten_quyen' => '[Back end]',
+                        'ma_quyen' => 'frontend.root',
+                        'ten_quyen' => '[Giao diện người dùng]',
                         'nhom_quyen' => 'Trang',
                         'thu_tu' => 10,
                         'children' => [
                             [
+                                'ma_quyen' => 'frontend.home.access',
+                                'ten_quyen' => 'Trang chủ & Danh mục',
+                                'nhom_quyen' => 'Front end',
+                                'thu_tu' => 10,
+                            ],
+                            [
+                                'ma_quyen' => 'frontend.topup.access',
+                                'ten_quyen' => 'Mua hàng & Nạp thẻ',
+                                'nhom_quyen' => 'Front end',
+                                'thu_tu' => 20,
+                            ],
+                        ],
+                    ],
+                    [
+                        'ma_quyen' => 'backend.root',
+                        'ten_quyen' => '[Trang quản trị Back end]',
+                        'nhom_quyen' => 'Trang',
+                        'thu_tu' => 20,
+                        'children' => [
+                            [
                                 'ma_quyen' => 'backend.inventory',
-                                'ten_quyen' => 'Quản lý kho',
-                                'nhom_quyen' => 'Quản lý kho',
+                                'ten_quyen' => 'Tổng quan hệ thống',
+                                'nhom_quyen' => 'Tổng quan hệ thống',
                                 'thu_tu' => 10,
                                 'children' => [
                                     [
                                         'ma_quyen' => 'dashboard.access',
-                                        'ten_quyen' => 'Quản lý lô hàng',
-                                        'nhom_quyen' => 'Quản lý kho',
+                                        'ten_quyen' => 'Tổng quan hệ thống',
+                                        'nhom_quyen' => 'Tổng quan hệ thống',
                                         'thu_tu' => 10,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'inventory.access',
-                                        'ten_quyen' => 'Kho mã thẻ',
-                                        'nhom_quyen' => 'Quản lý kho',
-                                        'thu_tu' => 20,
                                     ],
                                 ],
                             ],
@@ -49,7 +65,7 @@ class QuyenSeeder extends Seeder
                                 'ma_quyen' => 'backend.catalog',
                                 'ten_quyen' => 'Quản lý danh mục',
                                 'nhom_quyen' => 'Quản lý danh mục',
-                                'thu_tu' => 15,
+                                'thu_tu' => 20,
                                 'children' => [
                                     [
                                         'ma_quyen' => 'dich_vu.access',
@@ -63,87 +79,75 @@ class QuyenSeeder extends Seeder
                                         'nhom_quyen' => 'Quản lý danh mục',
                                         'thu_tu' => 20,
                                     ],
-                                ],
-                            ],
-                            [
-                                'ma_quyen' => 'policy.access',
-                                'ten_quyen' => 'Quản lý chính sách',
-                                'nhom_quyen' => 'Quản lý chính sách',
-                                'thu_tu' => 20,
-                            ],
-                            [
-                                'ma_quyen' => 'report.access',
-                                'ten_quyen' => 'Báo cáo',
-                                'nhom_quyen' => 'Báo cáo',
-                                'thu_tu' => 30,
-                            ],
-                            [
-                                'ma_quyen' => 'backend.admin',
-                                'ten_quyen' => 'Quản trị',
-                                'nhom_quyen' => 'Quản trị',
-                                'thu_tu' => 40,
-                                'children' => [
-                                    [
-                                        'ma_quyen' => 'account.access',
-                                        'ten_quyen' => 'Quản lý tài khoản hệ thống',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 10,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'role.access',
-                                        'ten_quyen' => 'Vai trò',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 20,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'service_config.access',
-                                        'ten_quyen' => 'Cấu hình dịch vụ',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 30,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'audit_log.access',
-                                        'ten_quyen' => 'Nhật ký hoạt động',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 40,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'maintenance.access',
-                                        'ten_quyen' => 'Bảo trì hệ thống',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 50,
-                                    ],
-                                    [
-                                        'ma_quyen' => 'telegram_setting.access',
-                                        'ten_quyen' => 'Cấu hình thông báo Telegram',
-                                        'nhom_quyen' => 'Quản trị',
-                                        'thu_tu' => 60,
-                                    ],
-                                ],
-                            ],
-                            [
-                                'ma_quyen' => 'backend.products',
-                                'ten_quyen' => 'Quản lý sản phẩm',
-                                'nhom_quyen' => 'Quản lý sản phẩm',
-                                'thu_tu' => 50,
-                                'children' => [
                                     [
                                         'ma_quyen' => 'product.access',
                                         'ten_quyen' => 'Sản phẩm',
-                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'nhom_quyen' => 'Quản lý danh mục',
+                                        'thu_tu' => 30,
+                                    ],
+                                ],
+                            ],
+                            [
+                                'ma_quyen' => 'backend.providers',
+                                'ten_quyen' => 'Quản lý nhà cung cấp',
+                                'nhom_quyen' => 'Quản lý nhà cung cấp',
+                                'thu_tu' => 30,
+                                'children' => [
+                                    [
+                                        'ma_quyen' => 'service_config.access',
+                                        'ten_quyen' => 'Nhà cung cấp & Kết nối API',
+                                        'nhom_quyen' => 'Quản lý nhà cung cấp',
                                         'thu_tu' => 10,
                                     ],
                                     [
                                         'ma_quyen' => 'provider_product.access',
-                                        'ten_quyen' => 'Sản phẩm nhà cung cấp',
-                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'ten_quyen' => 'Sản phẩm Nhà Cung Cấp',
+                                        'nhom_quyen' => 'Quản lý nhà cung cấp',
                                         'thu_tu' => 20,
                                     ],
                                     [
                                         'ma_quyen' => 'provider_error_code.access',
-                                        'ten_quyen' => 'Mã lỗi nhà cung cấp',
-                                        'nhom_quyen' => 'Quản lý sản phẩm',
+                                        'ten_quyen' => 'Mã lỗi Nhà Cung Cấp',
+                                        'nhom_quyen' => 'Quản lý nhà cung cấp',
                                         'thu_tu' => 30,
+                                    ],
+                                ],
+                            ],
+                            [
+                                'ma_quyen' => 'backend.b2b',
+                                'ten_quyen' => 'Quản lý đại lý (B2B)',
+                                'nhom_quyen' => 'Quản lý đại lý',
+                                'thu_tu' => 40,
+                                'children' => [
+                                    [
+                                        'ma_quyen' => 'b2b_partner.access',
+                                        'ten_quyen' => 'Đại lý API',
+                                        'nhom_quyen' => 'Quản lý đại lý',
+                                        'thu_tu' => 10,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'b2b_order.access',
+                                        'ten_quyen' => 'Đơn hàng B2B',
+                                        'nhom_quyen' => 'Quản lý đại lý',
+                                        'thu_tu' => 20,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'b2b_credit.access',
+                                        'ten_quyen' => 'Công nợ & Thanh toán',
+                                        'nhom_quyen' => 'Quản lý đại lý',
+                                        'thu_tu' => 30,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'b2b_reconciliation.access',
+                                        'ten_quyen' => 'Kỳ đối soát',
+                                        'nhom_quyen' => 'Quản lý đại lý',
+                                        'thu_tu' => 40,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'b2b_webhook.access',
+                                        'ten_quyen' => 'Lịch sử Webhook',
+                                        'nhom_quyen' => 'Quản lý đại lý',
+                                        'thu_tu' => 50,
                                     ],
                                 ],
                             ],
@@ -151,27 +155,45 @@ class QuyenSeeder extends Seeder
                                 'ma_quyen' => 'order.access',
                                 'ten_quyen' => 'Quản lý đơn hàng',
                                 'nhom_quyen' => 'Quản lý đơn hàng',
+                                'thu_tu' => 50,
+                            ],
+                            [
+                                'ma_quyen' => 'backend.admin',
+                                'ten_quyen' => 'Quản trị hệ thống',
+                                'nhom_quyen' => 'Quản trị hệ thống',
                                 'thu_tu' => 60,
-                            ],
-                        ],
-                    ],
-                    [
-                        'ma_quyen' => 'frontend.root',
-                        'ten_quyen' => '[Front end]',
-                        'nhom_quyen' => 'Trang',
-                        'thu_tu' => 20,
-                        'children' => [
-                            [
-                                'ma_quyen' => 'frontend.home.access',
-                                'ten_quyen' => 'Trang chủ người dùng',
-                                'nhom_quyen' => 'Front end',
-                                'thu_tu' => 10,
-                            ],
-                            [
-                                'ma_quyen' => 'frontend.topup.access',
-                                'ten_quyen' => 'Nạp tiền điện thoại',
-                                'nhom_quyen' => 'Front end',
-                                'thu_tu' => 20,
+                                'children' => [
+                                    [
+                                        'ma_quyen' => 'account.access',
+                                        'ten_quyen' => 'Tài khoản người dùng',
+                                        'nhom_quyen' => 'Quản trị hệ thống',
+                                        'thu_tu' => 10,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'role.access',
+                                        'ten_quyen' => 'Phân quyền vai trò',
+                                        'nhom_quyen' => 'Quản trị hệ thống',
+                                        'thu_tu' => 20,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'audit_log.access',
+                                        'ten_quyen' => 'Nhật ký hoạt động',
+                                        'nhom_quyen' => 'Quản trị hệ thống',
+                                        'thu_tu' => 30,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'maintenance.access',
+                                        'ten_quyen' => 'Bảo trì & Hiệu năng',
+                                        'nhom_quyen' => 'Quản trị hệ thống',
+                                        'thu_tu' => 40,
+                                    ],
+                                    [
+                                        'ma_quyen' => 'telegram_setting.access',
+                                        'ten_quyen' => 'Cấu hình thông báo Telegram',
+                                        'nhom_quyen' => 'Quản trị hệ thống',
+                                        'thu_tu' => 50,
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -182,75 +204,131 @@ class QuyenSeeder extends Seeder
         $this->upsertTree($accessTree);
 
         $this->upsertActionPermissions([
-            'dashboard.access' => [['dashboard.view', 'Xem dashboard']],
-            'account.access' => [
-                ['account.view', 'Xem tài khoản'], ['account.create', 'Tạo tài khoản'],
-                ['account.update', 'Sửa tài khoản'], ['account.delete', 'Xóa tài khoản'],
-                ['account.export', 'Xuất tài khoản'], ['account.lock', 'Khóa/mở khóa tài khoản'],
+            'frontend.home.access' => [
+                ['frontend.home.view', 'Xem trang chủ'],
             ],
-            'role.access' => [
-                ['role.view', 'Xem vai trò'], ['role.assign_permission', 'Gán quyền cho vai trò'],
+            'frontend.topup.access' => [
+                ['frontend.topup.view', 'Xem giao diện nạp thẻ'],
+                ['frontend.topup.order', 'Đặt hàng nạp thẻ'],
+            ],
+            'dashboard.access' => [
+                ['dashboard.view', 'Xem Dashboard & Thống kê'],
             ],
             'dich_vu.access' => [
-                ['dich_vu.view', 'Xem dịch vụ'], ['dich_vu.create', 'Tạo dịch vụ'],
-                ['dich_vu.update', 'Sửa dịch vụ'], ['dich_vu.delete', 'Xóa dịch vụ'],
+                ['dich_vu.view', 'Xem dịch vụ'],
+                ['dich_vu.create', 'Thêm dịch vụ'],
+                ['dich_vu.update', 'Sửa dịch vụ'],
+                ['dich_vu.delete', 'Xóa dịch vụ'],
                 ['dich_vu.export', 'Xuất dịch vụ'],
             ],
             'loai_san_pham.access' => [
-                ['loai_san_pham.view', 'Xem loại sản phẩm'], ['loai_san_pham.create', 'Tạo loại sản phẩm'],
-                ['loai_san_pham.update', 'Sửa loại sản phẩm'], ['loai_san_pham.delete', 'Xóa loại sản phẩm'],
+                ['loai_san_pham.view', 'Xem loại sản phẩm'],
+                ['loai_san_pham.create', 'Thêm loại sản phẩm'],
+                ['loai_san_pham.update', 'Sửa loại sản phẩm'],
+                ['loai_san_pham.delete', 'Xóa loại sản phẩm'],
                 ['loai_san_pham.export', 'Xuất loại sản phẩm'],
             ],
-            'service_config.access' => [
-                ['service_config.view', 'Xem nhà cung cấp'], ['service_config.create', 'Thêm nhà cung cấp'],
-                ['service_config.update', 'Sửa nhà cung cấp'], ['service_config.delete', 'Xóa nhà cung cấp'],
-                ['service_config.test', 'Kiểm tra kết nối'], ['service_config.reset_circuit', 'Đặt lại circuit breaker'],
-            ],
             'product.access' => [
-                ['product.view', 'Xem sản phẩm'], ['product.create', 'Tạo sản phẩm'],
-                ['product.update', 'Sửa sản phẩm'], ['product.delete', 'Xóa sản phẩm'],
-                ['product.map', 'Map sản phẩm NCC'], ['product.sync', 'Đồng bộ từ NCC'],
+                ['product.view', 'Xem sản phẩm'],
+                ['product.create', 'Thêm sản phẩm'],
+                ['product.update', 'Sửa sản phẩm'],
+                ['product.delete', 'Xóa sản phẩm'],
+                ['product.map', 'Map sản phẩm NCC'],
+                ['product.sync', 'Đồng bộ từ NCC'],
+            ],
+            'service_config.access' => [
+                ['service_config.view', 'Xem nhà cung cấp'],
+                ['service_config.create', 'Thêm nhà cung cấp'],
+                ['service_config.update', 'Sửa nhà cung cấp'],
+                ['service_config.delete', 'Xóa nhà cung cấp'],
+                ['service_config.test', 'Kiểm tra kết nối'],
+                ['service_config.reset_circuit', 'Đặt lại Circuit Breaker'],
             ],
             'provider_product.access' => [
-                ['provider_product.view', 'Xem sản phẩm NCC'], ['provider_product.create', 'Tạo sản phẩm NCC'],
-                ['provider_product.update', 'Sửa sản phẩm NCC'], ['provider_product.delete', 'Xóa sản phẩm NCC'],
-                ['provider_product.map', 'Map sản phẩm'], ['provider_product.sync', 'Đồng bộ sản phẩm NCC'],
+                ['provider_product.view', 'Xem sản phẩm NCC'],
+                ['provider_product.create', 'Thêm sản phẩm NCC'],
+                ['provider_product.update', 'Sửa sản phẩm NCC'],
+                ['provider_product.delete', 'Xóa sản phẩm NCC'],
+                ['provider_product.map', 'Map sản phẩm NCC'],
+                ['provider_product.sync', 'Đồng bộ sản phẩm NCC'],
             ],
             'provider_error_code.access' => [
-                ['provider_error_code.view', 'Xem mã lỗi NCC'], ['provider_error_code.create', 'Tạo mã lỗi NCC'],
-                ['provider_error_code.update', 'Sửa mã lỗi NCC'], ['provider_error_code.delete', 'Xóa mã lỗi NCC'],
+                ['provider_error_code.view', 'Xem mã lỗi NCC'],
+                ['provider_error_code.create', 'Thêm mã lỗi NCC'],
+                ['provider_error_code.update', 'Sửa mã lỗi NCC'],
+                ['provider_error_code.delete', 'Xóa mã lỗi NCC'],
+            ],
+            'b2b_partner.access' => [
+                ['b2b_partner.view', 'Xem đại lý API'],
+                ['b2b_partner.create', 'Tạo đại lý API'],
+                ['b2b_partner.update', 'Sửa đại lý API'],
+                ['b2b_partner.rotate_key', 'Đổi / Thu hồi Key API'],
+                ['b2b_partner.pricing', 'Cấu hình bảng giá riêng'],
+            ],
+            'b2b_order.access' => [
+                ['b2b_order.view', 'Xem đơn hàng B2B'],
+            ],
+            'b2b_credit.access' => [
+                ['b2b_credit.view', 'Xem công nợ & giao dịch'],
+                ['b2b_credit.payment', 'Ghi nhận thanh toán / nạp tiền'],
+                ['b2b_credit.adjustment', 'Điều chỉnh hạn mức / công nợ'],
+            ],
+            'b2b_reconciliation.access' => [
+                ['b2b_reconciliation.view', 'Xem kỳ đối soát'],
+                ['b2b_reconciliation.create', 'Tạo kỳ đối soát'],
+                ['b2b_reconciliation.lock', 'Khóa / Mở khóa kỳ đối soát'],
+                ['b2b_reconciliation.recalculate', 'Tính toán lại kỳ đối soát'],
+                ['b2b_reconciliation.export', 'Xuất Excel đối soát'],
+            ],
+            'b2b_webhook.access' => [
+                ['b2b_webhook.view', 'Xem lịch sử webhook'],
+                ['b2b_webhook.retry', 'Gửi lại webhook'],
             ],
             'order.access' => [
-                ['order.view', 'Xem đơn hàng'], ['order.export', 'Xuất đơn hàng'],
+                ['order.view', 'Xem đơn hàng'],
+                ['order.update', 'Cập nhật đơn hàng'],
+                ['order.export', 'Xuất đơn hàng'],
                 ['order.refund', 'Hoàn tiền đơn hàng'],
             ],
+            'account.access' => [
+                ['account.view', 'Xem tài khoản'],
+                ['account.create', 'Tạo tài khoản'],
+                ['account.update', 'Sửa tài khoản'],
+                ['account.delete', 'Xóa tài khoản'],
+                ['account.export', 'Xuất tài khoản'],
+                ['account.lock', 'Khóa / Mở khóa tài khoản'],
+            ],
+            'role.access' => [
+                ['role.view', 'Xem vai trò'],
+                ['role.create', 'Thêm vai trò'],
+                ['role.update', 'Sửa vai trò'],
+                ['role.delete', 'Xóa vai trò'],
+                ['role.assign_permission', 'Gán quyền cho vai trò'],
+            ],
             'audit_log.access' => [
-                ['audit_log.view', 'Xem nhật ký'], ['audit_log.export', 'Xuất nhật ký'],
+                ['audit_log.view', 'Xem nhật ký hoạt động'],
+                ['audit_log.export', 'Xuất nhật ký hoạt động'],
             ],
             'maintenance.access' => [
-                ['maintenance.view', 'Xem trang bảo trì'], ['maintenance.clear_cache', 'Xóa cache'],
-                ['maintenance.download_logs', 'Tải xuống log'],
+                ['maintenance.view', 'Xem trang bảo trì'],
+                ['maintenance.clear_cache', 'Xóa bộ nhớ cache'],
+                ['maintenance.download_logs', 'Tải xuống tệp log'],
             ],
             'telegram_setting.access' => [
-                ['telegram_setting.view', 'Xem cấu hình thông báo'],
-                ['telegram_setting.update', 'Cập nhật cấu hình thông báo'],
-                ['telegram_setting.test', 'Kiểm tra gửi tin nhắn'],
+                ['telegram_setting.view', 'Xem cấu hình Telegram'],
+                ['telegram_setting.update', 'Cập nhật cấu hình Telegram'],
+                ['telegram_setting.test', 'Kiểm tra gửi tin nhắn Telegram'],
             ],
         ]);
+
         $this->migrateLegacyAccessGrants();
 
-        // Các quyền cũ được giữ lại để không phá những nơi đã tham chiếu trước đó.
-        // Chúng không hiện trong cây phân quyền truy cập mới.
+        // Quyền tương thích cũ
         $legacyPermissions = [
-            ['ma_quyen' => 'dashboard.view', 'ten_quyen' => 'Xem dashboard', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 100],
             ['ma_quyen' => 'user.view', 'ten_quyen' => 'Xem người dùng', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 110],
             ['ma_quyen' => 'user.create', 'ten_quyen' => 'Thêm người dùng', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 111],
             ['ma_quyen' => 'user.update', 'ten_quyen' => 'Sửa người dùng', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 112],
             ['ma_quyen' => 'user.delete', 'ten_quyen' => 'Xóa người dùng', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 113],
-            ['ma_quyen' => 'role.view', 'ten_quyen' => 'Xem vai trò', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 120],
-            ['ma_quyen' => 'role.create', 'ten_quyen' => 'Thêm vai trò', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 121],
-            ['ma_quyen' => 'role.update', 'ten_quyen' => 'Sửa vai trò', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 122],
-            ['ma_quyen' => 'role.delete', 'ten_quyen' => 'Xóa vai trò', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 123],
             ['ma_quyen' => 'permission.view', 'ten_quyen' => 'Xem quyền', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 130],
             ['ma_quyen' => 'permission.assign', 'ten_quyen' => 'Gán quyền', 'nhom_quyen' => 'Tương thích cũ', 'thu_tu' => 131],
         ];
@@ -259,8 +337,7 @@ class QuyenSeeder extends Seeder
             $this->upsertPermission($permission, null);
         }
 
-        $this->grantDefaultPermissionsToAdmin();
-        $this->grantDefaultPermissionsToUser();
+        $this->grantDefaultRolePermissions();
     }
 
     private function upsertTree(array $nodes, ?int $parentId = null): void
@@ -303,8 +380,10 @@ class QuyenSeeder extends Seeder
             'dich_vu.access', 'loai_san_pham.access',
             'service_config.access', 'product.access',
             'provider_product.access', 'provider_error_code.access',
+            'b2b_partner.access', 'b2b_order.access', 'b2b_credit.access',
+            'b2b_reconciliation.access', 'b2b_webhook.access',
             'order.access', 'audit_log.access', 'maintenance.access',
-            'telegram_setting.access',
+            'telegram_setting.access', 'frontend.home.access', 'frontend.topup.access',
         ];
 
         foreach (DB::table('quyen')->whereIn('ma_quyen', $parentCodes)->get() as $parent) {
@@ -339,76 +418,96 @@ class QuyenSeeder extends Seeder
             ->value('id');
     }
 
-    private function grantDefaultPermissionsToAdmin(): void
+    private function grantDefaultRolePermissions(): void
     {
-        $adminRole = DB::table('vai_tro')
-            ->where('ma_vai_tro', 'admin')
-            ->first();
-
-        if (! $adminRole) {
-            return;
+        // 1. ADMIN: Toàn bộ quyền trong hệ thống
+        $adminRole = DB::table('vai_tro')->where('ma_vai_tro', 'admin')->first();
+        if ($adminRole) {
+            $allActiveIds = DB::table('quyen')->where('trang_thai', 'hoat_dong')->pluck('id');
+            foreach ($allActiveIds as $pId) {
+                DB::table('vai_tro_quyen')->updateOrInsert(
+                    ['vai_tro_id' => $adminRole->id, 'quyen_id' => $pId],
+                    ['tao_luc' => now()]
+                );
+            }
         }
 
-        $defaultCodes = DB::table('quyen')->where('trang_thai', 'hoat_dong')->pluck('ma_quyen')->all();
+        // 2. KẾ TOÁN (ke_toan): Đơn hàng, Công nợ & Thanh toán, Xem Đối soát
+        $keToanRole = DB::table('vai_tro')->where('ma_vai_tro', 'ke_toan')->first();
+        if ($keToanRole) {
+            $keToanCodes = [
+                'page.root', 'backend.root',
+                'order.access', 'order.view', 'order.export',
+                'backend.b2b', 'b2b_order.access', 'b2b_order.view',
+                'b2b_credit.access', 'b2b_credit.view', 'b2b_credit.payment', 'b2b_credit.adjustment',
+                'b2b_reconciliation.access', 'b2b_reconciliation.view', 'b2b_reconciliation.export',
+            ];
+            $this->assignCodesToRole((int) $keToanRole->id, $keToanCodes);
+        }
 
-        $this->removeManagedAccessPermissions((int) $adminRole->id);
+        // 3. ĐỐI SOÁT (doi_soat): Đơn hàng B2B, Toàn quyền Kỳ đối soát
+        $doiSoatRole = DB::table('vai_tro')->where('ma_vai_tro', 'doi_soat')->first();
+        if ($doiSoatRole) {
+            $doiSoatCodes = [
+                'page.root', 'backend.root',
+                'order.access', 'order.view', 'order.export',
+                'backend.b2b', 'b2b_order.access', 'b2b_order.view',
+                'b2b_reconciliation.access', 'b2b_reconciliation.view', 'b2b_reconciliation.create',
+                'b2b_reconciliation.lock', 'b2b_reconciliation.recalculate', 'b2b_reconciliation.export',
+            ];
+            $this->assignCodesToRole((int) $doiSoatRole->id, $doiSoatCodes);
+        }
 
-        foreach (DB::table('quyen')->whereIn('ma_quyen', $defaultCodes)->get() as $permission) {
-            DB::table('vai_tro_quyen')->updateOrInsert(
-                [
-                    'vai_tro_id' => $adminRole->id,
-                    'quyen_id' => $permission->id,
-                ],
-                ['tao_luc' => now()]
-            );
+        // 4. BACKEND (Nhân viên vận hành): Dashboard, Danh mục, Sản phẩm, NCC, Đơn hàng
+        $backendRole = DB::table('vai_tro')->where('ma_vai_tro', 'backend')->first();
+        if ($backendRole) {
+            $backendCodes = [
+                'page.root', 'backend.root',
+                'backend.inventory', 'dashboard.access', 'dashboard.view',
+                'backend.catalog',
+                'dich_vu.access', 'dich_vu.view', 'dich_vu.create', 'dich_vu.update', 'dich_vu.export',
+                'loai_san_pham.access', 'loai_san_pham.view', 'loai_san_pham.create', 'loai_san_pham.update', 'loai_san_pham.export',
+                'product.access', 'product.view', 'product.create', 'product.update', 'product.map', 'product.sync',
+                'backend.providers',
+                'service_config.access', 'service_config.view', 'service_config.test',
+                'provider_product.access', 'provider_product.view', 'provider_product.create', 'provider_product.update', 'provider_product.map', 'provider_product.sync',
+                'provider_error_code.access', 'provider_error_code.view', 'provider_error_code.create', 'provider_error_code.update',
+                'order.access', 'order.view', 'order.update', 'order.export',
+            ];
+            $this->assignCodesToRole((int) $backendRole->id, $backendCodes);
+        }
+
+        // 5. USER (Khách hàng thông thường): Chỉ có quyền Frontend
+        $userRole = DB::table('vai_tro')->where('ma_vai_tro', 'user')->first();
+        if ($userRole) {
+            $userCodes = [
+                'page.root',
+                'frontend.root',
+                'frontend.home.access',
+                'frontend.home.view',
+                'frontend.topup.access',
+                'frontend.topup.view',
+                'frontend.topup.order',
+            ];
+            $this->assignCodesToRole((int) $userRole->id, $userCodes);
+        }
+
+        // Clear permission cache
+        try {
+            app(PermissionCacheService::class)->clearAll();
+        } catch (\Throwable $e) {
+            // cache service might be missing during initial seed
         }
     }
 
-    private function grantDefaultPermissionsToUser(): void
+    private function assignCodesToRole(int $roleId, array $codes): void
     {
-        $userRole = DB::table('vai_tro')
-            ->where('ma_vai_tro', 'user')
-            ->first();
-
-        if (! $userRole) {
-            return;
-        }
-
-        $defaultCodes = [
-            'page.root',
-            'frontend.root',
-            'frontend.home.access',
-            'frontend.topup.access',
-        ];
-
-        $this->removeManagedAccessPermissions((int) $userRole->id);
-
-        foreach (DB::table('quyen')->whereIn('ma_quyen', $defaultCodes)->get() as $permission) {
+        $permissionIds = DB::table('quyen')->whereIn('ma_quyen', $codes)->pluck('id');
+        foreach ($permissionIds as $pId) {
             DB::table('vai_tro_quyen')->updateOrInsert(
-                [
-                    'vai_tro_id' => $userRole->id,
-                    'quyen_id' => $permission->id,
-                ],
+                ['vai_tro_id' => $roleId, 'quyen_id' => $pId],
                 ['tao_luc' => now()]
             );
         }
-    }
-
-    private function removeManagedAccessPermissions(int $roleId): void
-    {
-        $managedPermissionIds = DB::table('quyen')
-            ->where(function ($query) {
-                $query
-                    ->where('ma_quyen', 'like', '%.access')
-                    ->orWhere('ma_quyen', 'like', 'page.%')
-                    ->orWhere('ma_quyen', 'like', 'backend.%')
-                    ->orWhere('ma_quyen', 'like', 'frontend.%');
-            })
-            ->pluck('id');
-
-        DB::table('vai_tro_quyen')
-            ->where('vai_tro_id', $roleId)
-            ->whereIn('quyen_id', $managedPermissionIds)
-            ->delete();
     }
 }

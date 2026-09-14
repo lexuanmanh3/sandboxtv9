@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Quản lý loại sản phẩm')
+@section('title', 'tv9tech - Quản lý loại sản phẩm')
 
 @push('styles')
   {{-- NOTE: Dung chung CSS voi man tai khoan/vai tro/dich vu vi cung 1 kieu layout card + table + modal. --}}

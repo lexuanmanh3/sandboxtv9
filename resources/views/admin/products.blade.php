@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Quản lý sản phẩm')
+@section('title', 'tv9tech - Quản lý sản phẩm')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('backend/css/admin-accounts.css') }}">
@@ -80,8 +80,8 @@
           <span>Trạng thái</span>
           <select name="trang_thai">
             <option value="">Tất cả</option>
-            <option value="ACTIVE" @selected(($filters['trang_thai'] ?? '') === 'ACTIVE')>Hoạt động</option>
-            <option value="tam_dung" @selected(($filters['trang_thai'] ?? '') === 'tam_dung')>Tạm dừng</option>
+            <option value="hoat_dong" @selected(($filters['trang_thai'] ?? '') === 'hoat_dong' || ($filters['trang_thai'] ?? '') === 'ACTIVE')>Hoạt động</option>
+            <option value="tam_dung" @selected(($filters['trang_thai'] ?? '') === 'tam_dung' || ($filters['trang_thai'] ?? '') === 'INACTIVE')>Tạm dừng</option>
           </select>
         </label>
         <button class="account-btn account-btn--primary" type="submit">
@@ -298,7 +298,7 @@
           <label>
             <span>Trạng thái (*)</span>
             <select name="trang_thai" required>
-              <option value="ACTIVE">Hoạt động</option>
+              <option value="hoat_dong">Hoạt động</option>
               <option value="tam_dung">Tạm dừng</option>
             </select>
           </label>

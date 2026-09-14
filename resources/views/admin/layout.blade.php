@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@yield('title', 'VietFin Portal')</title>
+  <title>@yield('title', 'tv9tech Portal')</title>
 
-  <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
-  <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
-  <link rel="stylesheet" href="{{ asset('backend/css/admin.css') }}?v={{ filemtime(public_path('backend/css/admin.css')) }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ asset('backend/css/admin.css') }}">
   @stack('styles')
 </head>
 <body class="admin-page">
@@ -30,57 +31,64 @@
 
     <aside class="admin-sidebar" data-admin-sidebar>
       <div class="admin-sidebar__brand">
-        <a class="admin-brand" href="{{ $adminHomeUrl ?? route('admin.dashboard') }}">
-          <span class="admin-brand__icon"><x-icon name="home" /></span>
-          <span>
-            <strong>VietFin Portal</strong>
-            <small>Hệ thống quản lý</small>
-          </span>
+        <a class="admin-brand" href="{{ $adminHomeUrl ?? route('admin.dashboard') }}" aria-label="tv9tech Portal">
+          <img class="admin-brand__logo" src="{{ asset('backend/img/logo.png') }}" alt="tv9tech" style="height: 38px; max-width: 180px; object-fit: contain; display: block;">
         </a>
       </div>
 
       @php
-        // NOTE: Các biến canAccess* dùng để ẩn/hiện menu theo quyền truy cập module.
         $currentUser = auth()->user();
-        $canAccessDashboard = $currentUser?->coQuyen('dashboard.view');
-        $canAccessInventory = $currentUser?->coQuyen('inventory.access');
-        $canAccessPolicy = $currentUser?->coQuyen('policy.access');
-        $canAccessReport = $currentUser?->coQuyen('report.access');
-        $canAccessAccounts = $currentUser?->coQuyen('account.view');
-        $canAccessProviderGroup = $currentUser?->coQuyen('service_config.access');
-        $canAccessServices = $currentUser?->coQuyen('dich_vu.view');
-        $canAccessCategories = $currentUser?->coQuyen('loai_san_pham.view');
-        $canAccessCatalogGroup = $currentUser?->coMotTrongCacQuyen(['dich_vu.view', 'loai_san_pham.view']);
-        $canAccessAdminGroup = $currentUser?->coMotTrongCacQuyen(['account.view', 'role.view']);
+        $isAdmin = (bool) $currentUser?->isAdmin();
 
-        $inventoryOpen = request()->routeIs('admin.dashboard');
+        $canAccessDashboard = $isAdmin || $currentUser?->coQuyen('dashboard.view');
+        
+        $canAccessServices = $isAdmin || $currentUser?->coQuyen('dich_vu.view');
+        $canAccessCategories = $isAdmin || $currentUser?->coQuyen('loai_san_pham.view');
+        $canAccessProducts = $isAdmin || $currentUser?->coQuyen('product.view');
+        $canAccessCatalogGroup = $canAccessServices || $canAccessCategories || $canAccessProducts;
+
+        $canAccessProviders = $isAdmin || $currentUser?->coQuyen('service_config.view');
+        $canAccessProviderProducts = $isAdmin || $currentUser?->coQuyen('provider_product.view');
+        $canAccessProviderErrorCodes = $isAdmin || $currentUser?->coQuyen('provider_error_code.view');
+        $canAccessProviderGroup = $canAccessProviders || $canAccessProviderProducts || $canAccessProviderErrorCodes;
+
+        $canAccessB2bPartners = $isAdmin || $currentUser?->coQuyen('b2b_partner.view');
+        $canAccessB2bOrders = $isAdmin || $currentUser?->coQuyen('b2b_order.view');
+        $canAccessB2bCredit = $isAdmin || $currentUser?->coQuyen('b2b_credit.view');
+        $canAccessB2bReconciliation = $isAdmin || $currentUser?->coQuyen('b2b_reconciliation.view');
+        $canAccessB2bWebhooks = $isAdmin || $currentUser?->coQuyen('b2b_webhook.view');
+        $canAccessB2bGroup = $canAccessB2bPartners || $canAccessB2bOrders || $canAccessB2bCredit || $canAccessB2bReconciliation || $canAccessB2bWebhooks;
+
+        $canAccessOrders = $isAdmin || $currentUser?->coQuyen('order.view');
+
+        $canAccessAccounts = $isAdmin || $currentUser?->coQuyen('account.view');
+        $canAccessRoles = $isAdmin || $currentUser?->coQuyen('role.view');
+        $canAccessAuditLogs = $isAdmin || $currentUser?->coQuyen('audit_log.view');
+        $canAccessMaintenance = $isAdmin || $currentUser?->coQuyen('maintenance.view');
+        $canAccessTelegram = $isAdmin || $currentUser?->coQuyen('telegram_setting.view');
+        $canAccessAdminGroup = $canAccessAccounts || $canAccessRoles || $canAccessAuditLogs || $canAccessMaintenance || $canAccessTelegram;
+
         $catalogOpen = request()->routeIs('admin.services', 'app.services', 'admin.categories', 'app.categories', 'admin.products');
         $providerOpen = request()->routeIs('admin.providers', 'admin.provider-products', 'admin.provider-error-codes');
+        $b2bOpen = request()->routeIs('admin.b2b.*');
         $adminOpen = request()->routeIs('admin.accounts', 'app.users', 'admin.roles', 'app.roles', 'admin.audit-logs', 'admin.maintenance', 'admin.telegram-settings');
       @endphp
 
       <nav class="admin-nav" aria-label="Menu quản trị">
-        @if ($canAccessInventory || $canAccessDashboard)
-          <div class="admin-nav__group {{ $inventoryOpen ? 'is-open' : '' }}" data-nav-group>
-            <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $inventoryOpen ? 'true' : 'false' }}">
-              <span><x-icon name="description" /> Quản lý kho</span>
-              <svg class="admin-nav__chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                <path d="M5 7.5 10 12.5 15 7.5" />
-              </svg>
-            </button>
-            <div class="admin-nav__submenu">
-              @if ($canAccessDashboard)
-                <a class="{{ request()->routeIs('admin.dashboard') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">Quản lý lô hàng</a>
-              @endif
-              @if ($canAccessInventory)
-                <a href="#">Kho mã thẻ</a>
-                <a href="#">Chi tiết kho thẻ</a>
-                <a href="#">DS mã GD lấy thẻ từ kho</a>
-              @endif
-            </div>
-          </div>
+        {{-- TỔNG QUAN HỆ THỐNG (DASHBOARD) --}}
+        @if ($canAccessDashboard)
+          <a class="admin-nav__link {{ request()->routeIs('admin.dashboard') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Tổng quan hệ thống</span>
+          </a>
         @endif
 
+        {{-- QUẢN LÝ DANH MỤC --}}
         @if ($canAccessCatalogGroup)
           <div class="admin-nav__group {{ $catalogOpen ? 'is-open' : '' }}" data-nav-group>
             <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $catalogOpen ? 'true' : 'false' }}">
@@ -96,13 +104,15 @@
               @if ($canAccessCategories)
                 <a class="{{ request()->routeIs('admin.categories', 'app.categories') ? 'is-active' : '' }}" href="{{ route('admin.categories') }}">Loại sản phẩm</a>
               @endif
-              <a class="{{ request()->routeIs('admin.products') ? 'is-active' : '' }}" href="{{ route('admin.products') }}">Sản phẩm</a>
+              @if ($canAccessProducts)
+                <a class="{{ request()->routeIs('admin.products') ? 'is-active' : '' }}" href="{{ route('admin.products') }}">Sản phẩm</a>
+              @endif
             </div>
           </div>
         @endif
 
-        {{-- NHÓM QUẢN LÝ NHÀ CUNG CẤP (CPT RIÊNG) --}}
-        @if ($canAccessProviderGroup || $currentUser?->coMotTrongCacQuyen(['account.view', 'role.view']) || $currentUser?->vai_tro === 'admin')
+        {{-- NHÓM QUẢN LÝ NHÀ CUNG CẤP --}}
+        @if ($canAccessProviderGroup)
           <div class="admin-nav__group {{ $providerOpen ? 'is-open' : '' }}" data-nav-group>
             <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $providerOpen ? 'true' : 'false' }}">
               <span><x-icon name="cell_wifi" /> Nhà cung cấp</span>
@@ -111,35 +121,61 @@
               </svg>
             </button>
             <div class="admin-nav__submenu">
-              <a class="{{ request()->routeIs('admin.providers') ? 'is-active' : '' }}" href="{{ route('admin.providers') }}">Nhà cung cấp &amp; Kết nối</a>
-              <a class="{{ request()->routeIs('admin.provider-products') ? 'is-active' : '' }}" href="{{ route('admin.provider-products') }}">Sản phẩm Nhà Cung Cấp</a>
-              <a class="{{ request()->routeIs('admin.provider-error-codes') ? 'is-active' : '' }}" href="{{ route('admin.provider-error-codes') }}">Mã lỗi Nhà Cung Cấp</a>
+              @if ($canAccessProviders)
+                <a class="{{ request()->routeIs('admin.providers') ? 'is-active' : '' }}" href="{{ route('admin.providers') }}">Nhà cung cấp &amp; Kết nối</a>
+              @endif
+              @if ($canAccessProviderProducts)
+                <a class="{{ request()->routeIs('admin.provider-products') ? 'is-active' : '' }}" href="{{ route('admin.provider-products') }}">Sản phẩm Nhà Cung Cấp</a>
+              @endif
+              @if ($canAccessProviderErrorCodes)
+                <a class="{{ request()->routeIs('admin.provider-error-codes') ? 'is-active' : '' }}" href="{{ route('admin.provider-error-codes') }}">Mã lỗi Nhà Cung Cấp</a>
+              @endif
+            </div>
+          </div>
+        @endif
+
+        {{-- NHÓM QUẢN LÝ ĐẠI LÝ (B2B PARTNER HUB) --}}
+        @if ($canAccessB2bGroup)
+          <div class="admin-nav__group {{ $b2bOpen ? 'is-open' : '' }}" data-nav-group>
+            <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $b2bOpen ? 'true' : 'false' }}">
+              <span><x-icon name="badge" /> Quản lý đại lý</span>
+              <svg class="admin-nav__chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="M5 7.5 10 12.5 15 7.5" />
+              </svg>
+            </button>
+            <div class="admin-nav__submenu">
+              @if ($canAccessB2bPartners)
+                <a class="{{ request()->routeIs('admin.b2b.partners.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.partners.index') }}">Đại lý API</a>
+              @endif
+              @if ($canAccessB2bOrders)
+                <a class="{{ request()->routeIs('admin.b2b.orders.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.orders.index') }}">Đơn hàng B2B</a>
+              @endif
+              @if ($canAccessB2bCredit)
+                <a class="{{ request()->routeIs('admin.b2b.credit-payments.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.credit-payments.index') }}">Công nợ &amp; Thanh toán</a>
+              @endif
+              @if ($canAccessB2bReconciliation)
+                <a class="{{ request()->routeIs('admin.b2b.reconciliations.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.reconciliations.index') }}">Kỳ đối soát</a>
+              @endif
+              @if ($canAccessB2bWebhooks)
+                <a class="{{ request()->routeIs('admin.b2b.webhooks.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.webhooks.index') }}">Lịch sử Webhook</a>
+              @endif
+              @if ($canAccessAuditLogs)
+                <a class="{{ request()->routeIs('admin.audit-logs') && request()->input('search') === 'b2b' ? 'is-active' : '' }}" href="{{ route('admin.audit-logs', ['search' => 'b2b']) }}">Nhật ký thao tác</a>
+              @endif
             </div>
           </div>
         @endif
 
         {{-- CPT QUẢN LÝ HÓA ĐƠN & GIAO DỊCH --}}
-        <a class="admin-nav__link {{ request()->routeIs('admin.orders') ? 'is-active' : '' }}" href="{{ route('admin.orders') }}">
-          <x-icon name="payments" />
-          <span>Quản lý Hóa đơn</span>
-        </a>
-
-        @if ($canAccessPolicy)
-          <a class="admin-nav__link" href="#">
-            <x-icon name="badge" />
-            <span>Quản lý chính sách</span>
-          </a>
-        @endif
-
-        @if ($canAccessReport)
-          <a class="admin-nav__link" href="#">
-            <x-icon name="history" />
-            <span>Báo cáo</span>
+        @if ($canAccessOrders)
+          <a class="admin-nav__link {{ request()->routeIs('admin.orders') ? 'is-active' : '' }}" href="{{ route('admin.orders') }}">
+            <x-icon name="payments" />
+            <span>Quản lý Hóa đơn</span>
           </a>
         @endif
 
         {{-- NHÓM QUẢN TRỊ --}}
-        @if ($canAccessAdminGroup || $currentUser?->vai_tro === 'admin')
+        @if ($canAccessAdminGroup)
           <div class="admin-nav__group {{ $adminOpen ? 'is-open' : '' }}" data-nav-group>
             <button class="admin-nav__trigger" type="button" data-nav-trigger aria-expanded="{{ $adminOpen ? 'true' : 'false' }}">
               <span><x-icon name="account_circle" /> Quản trị</span>
@@ -148,15 +184,19 @@
               </svg>
             </button>
             <div class="admin-nav__submenu">
-              @if ($canAccessAccounts || $currentUser?->vai_tro === 'admin')
+              @if ($canAccessAccounts)
                 <a class="{{ request()->routeIs('admin.accounts', 'app.users') ? 'is-active' : '' }}" href="{{ route('admin.accounts') }}">Quản lý tài khoản hệ thống</a>
               @endif
-              @if ($canAccessRoles || $currentUser?->vai_tro === 'admin')
+              @if ($canAccessRoles)
                 <a class="{{ request()->routeIs('admin.roles', 'app.roles') ? 'is-active' : '' }}" href="{{ route('admin.roles') }}">Vai trò</a>
               @endif
-              <a class="{{ request()->routeIs('admin.audit-logs') ? 'is-active' : '' }}" href="{{ route('admin.audit-logs') }}">Nhật ký hoạt động</a>
-              <a class="{{ request()->routeIs('admin.maintenance') ? 'is-active' : '' }}" href="{{ route('admin.maintenance') }}">Bảo trì</a>
-              @if ($currentUser?->coQuyen('telegram_setting.view') || $currentUser?->vai_tro === 'admin')
+              @if ($canAccessAuditLogs)
+                <a class="{{ request()->routeIs('admin.audit-logs') ? 'is-active' : '' }}" href="{{ route('admin.audit-logs') }}">Nhật ký hoạt động</a>
+              @endif
+              @if ($canAccessMaintenance)
+                <a class="{{ request()->routeIs('admin.maintenance') ? 'is-active' : '' }}" href="{{ route('admin.maintenance') }}">Bảo trì</a>
+              @endif
+              @if ($canAccessTelegram)
                 <a class="{{ request()->routeIs('admin.telegram-settings') ? 'is-active' : '' }}" href="{{ route('admin.telegram-settings') }}">Thông báo Telegram</a>
               @endif
             </div>
@@ -178,7 +218,9 @@
           <button class="admin-menu-btn" type="button" data-admin-menu aria-label="Mở menu">
             <x-icon name="menu" />
           </button>
-          <a class="admin-topbar__brand" href="{{ $adminHomeUrl }}">VietFin</a>
+          <a class="admin-topbar__brand" href="{{ $adminHomeUrl }}" aria-label="tv9tech">
+            <img src="{{ asset('backend/img/logo.png') }}" alt="tv9tech" style="height: 28px; width: auto; max-width: 140px; object-fit: contain; vertical-align: middle;">
+          </a>
           <form class="admin-search" role="search">
             <x-icon name="visibility" />
             <input type="search" placeholder="Tìm kiếm...">

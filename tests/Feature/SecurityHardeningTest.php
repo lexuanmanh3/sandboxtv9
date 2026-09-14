@@ -92,7 +92,7 @@ class SecurityHardeningTest extends TestCase
 
         $this->actingAs($admin)
             ->put('/admin/telegram-settings', [
-                'bot_token' => '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
+                'bot_token' => 'TEST_TELEGRAM_BOT_TOKEN_1',
                 'chat_id_alert' => '-1001111111111',
                 'chat_id_order' => '-1002222222222',
                 'chat_id_admin' => '-1003333333333',
@@ -136,7 +136,7 @@ class SecurityHardeningTest extends TestCase
 
         $this->actingAs($admin)
             ->put('/admin/telegram-settings', [
-                'bot_token' => '8815830057:AAEVbFQtJXAofwJhTQaWuS273SfZmYUgxQ4',
+                'bot_token' => 'TEST_TELEGRAM_BOT_TOKEN_2',
                 'danh_sach_kenh' => $channels,
                 'cau_hinh_kenh_su_kien' => $eventMappings,
                 'bat_canh_bao_circuit_breaker' => '1',

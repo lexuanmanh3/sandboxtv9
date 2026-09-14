@@ -111,13 +111,13 @@ class CauHinhThongBao extends Model
         return Cache::remember('cau_hinh_thong_bao_telegram', 3600, function () {
             $config = self::where('loai', 'telegram')->first();
             if (!$config) {
-                // Tạo bản ghi mặc định lấy từ .env
+                // Tạo bản ghi mặc định lấy từ config/services.php
                 $config = self::create([
                     'loai' => 'telegram',
-                    'bot_token' => env('TELEGRAM_ALERT_BOT_TOKEN', env('TELEGRAM_BOT_TOKEN')),
-                    'chat_id_alert' => env('TELEGRAM_ALERT_CHAT_ID'),
-                    'chat_id_order' => env('TELEGRAM_ORDER_CHAT_ID', env('TELEGRAM_ALERT_CHAT_ID')),
-                    'chat_id_admin' => env('TELEGRAM_ADMIN_CHAT_ID', env('TELEGRAM_ALERT_CHAT_ID')),
+                    'bot_token' => config('services.telegram.bot_token'),
+                    'chat_id_alert' => config('services.telegram.channel_alert'),
+                    'chat_id_order' => config('services.telegram.channel_order', config('services.telegram.channel_alert')),
+                    'chat_id_admin' => config('services.telegram.channel_admin', config('services.telegram.channel_alert')),
                     'bat_thong_bao_don_hang' => true,
                     'bat_canh_bao_loi' => true,
                     'bat_canh_bao_xu_ly_cham' => true,

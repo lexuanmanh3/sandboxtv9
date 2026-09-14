@@ -82,7 +82,13 @@ class CategoryController extends Controller
 
         if ($request->hasFile('hinh_anh_file')) {
             $file = $request->file('hinh_anh_file');
-            $fileName = 'category_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $allowedExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+            $ext = strtolower($file->guessExtension() ?? '');
+            if (!in_array($ext, $allowedExtensions, true)) {
+                return back()->withInput()->withErrors(['hinh_anh_file' => 'Định dạng hình ảnh không hợp lệ. Chỉ chấp nhận jpg, png, webp.']);
+            }
+
+            $fileName = 'category_' . time() . '_' . \Illuminate\Support\Str::random(16) . '.' . $ext;
             $destinationPath = public_path('uploads/categories');
             if (! file_exists($destinationPath)) {
                 mkdir($destinationPath, 0755, true);
@@ -108,11 +114,28 @@ class CategoryController extends Controller
 
         if ($request->hasFile('hinh_anh_file')) {
             $file = $request->file('hinh_anh_file');
-            $fileName = 'category_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $allowedExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+            $ext = strtolower($file->guessExtension() ?? '');
+            if (!in_array($ext, $allowedExtensions, true)) {
+                return back()->withInput()->withErrors(['hinh_anh_file' => 'Định dạng hình ảnh không hợp lệ. Chỉ chấp nhận jpg, png, webp.']);
+            }
+
             $destinationPath = public_path('uploads/categories');
             if (! file_exists($destinationPath)) {
                 mkdir($destinationPath, 0755, true);
             }
+
+            // Xóa file cũ nếu an toàn (chống path traversal)
+            if (!empty($category->hinh_anh) && str_starts_with($category->hinh_anh, '/uploads/categories/')) {
+                $oldBase = basename($category->hinh_anh);
+                $baseDir = realpath($destinationPath);
+                $oldFullPath = realpath($destinationPath . DIRECTORY_SEPARATOR . $oldBase);
+                if ($oldFullPath && $baseDir && str_starts_with($oldFullPath, $baseDir) && file_exists($oldFullPath)) {
+                    @unlink($oldFullPath);
+                }
+            }
+
+            $fileName = 'category_' . time() . '_' . \Illuminate\Support\Str::random(16) . '.' . $ext;
             $file->move($destinationPath, $fileName);
             $validated['hinh_anh'] = '/uploads/categories/' . $fileName;
         }

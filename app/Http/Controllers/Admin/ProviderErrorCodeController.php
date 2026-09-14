@@ -126,12 +126,12 @@ class ProviderErrorCodeController extends Controller
     public function toggleStatus(Request $request, MaLoiNhaCungCap $errorCode): RedirectResponse|JsonResponse
     {
         try {
-            $newStatus = $errorCode->trang_thai === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+            $newStatus = in_array($errorCode->trang_thai, ['ACTIVE', 'hoat_dong']) ? 'tam_dung' : 'hoat_dong';
             $errorCode->update(['trang_thai' => $newStatus]);
 
             $this->clearErrorCodeCache();
 
-            $statusLabel = $newStatus === 'ACTIVE' ? 'Kích hoạt' : 'Tạm dừng';
+            $statusLabel = $newStatus === 'hoat_dong' ? 'Hoạt động' : 'Tạm dừng';
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -252,11 +252,24 @@ class ProviderErrorCodeController extends Controller
     }
 
     /**
-     * Xóa cache mã lỗi.
+     * Xóa cache mã lỗi an toàn cho mọi cache driver (file, redis, memcached...).
      */
-    private function clearErrorCodeCache(): void
+    private function clearErrorCodeCache(?string $code = null, ?int $providerId = null): void
     {
-        Cache::tags(['provider_error_codes'])->flush();
+        try {
+            if (method_exists(Cache::getStore(), 'tags')) {
+                Cache::tags(['provider_error_codes'])->flush();
+            }
+        } catch (Throwable) {
+            // Bỏ qua nếu cache store không hỗ trợ tags (như File Driver)
+        }
+
+        if ($code !== null) {
+            Cache::forget("err_map_all_{$code}");
+            if ($providerId) {
+                Cache::forget("err_map_{$providerId}_{$code}");
+            }
+        }
     }
 
     /**
@@ -287,7 +300,13 @@ class ProviderErrorCodeController extends Controller
         }
 
         if ($status = $request->query('trang_thai')) {
-            $query->where('trang_thai', $status);
+            if (in_array($status, ['hoat_dong', 'ACTIVE'])) {
+                $query->whereIn('trang_thai', ['hoat_dong', 'ACTIVE']);
+            } elseif (in_array($status, ['tam_dung', 'INACTIVE'])) {
+                $query->whereIn('trang_thai', ['tam_dung', 'INACTIVE']);
+            } else {
+                $query->where('trang_thai', $status);
+            }
         }
 
         return $query;

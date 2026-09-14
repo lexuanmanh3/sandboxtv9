@@ -202,7 +202,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->coVaiTro('admin') || $this->coVaiTro('quan_tri_vien') || $this->ten_dang_nhap === 'admin';
+        return $this->coVaiTro('admin') || $this->coVaiTro('quan_tri_vien') || $this->loai_tai_khoan === 'admin';
     }
 
     /**
@@ -224,6 +224,37 @@ class User extends Authenticatable
     public function coMotTrongCacQuyen(array $maQuyen): bool
     {
         return app(AuthorizationService::class)->allowsAny($this, $maQuyen);
+    }
+
+    public function hasAnyBackendAccess(): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        $backendCodes = [
+            'dashboard.access', 'dashboard.view',
+            'dich_vu.access', 'dich_vu.view',
+            'loai_san_pham.access', 'loai_san_pham.view',
+            'product.access', 'product.view',
+            'service_config.access', 'service_config.view',
+            'provider_product.access', 'provider_product.view',
+            'provider_error_code.access', 'provider_error_code.view',
+            'b2b_partner.access', 'b2b_partner.view',
+            'b2b_order.access', 'b2b_order.view',
+            'b2b_credit.access', 'b2b_credit.view',
+            'b2b_reconciliation.access', 'b2b_reconciliation.view',
+            'b2b_webhook.access', 'b2b_webhook.view',
+            'order.access', 'order.view',
+            'account.access', 'account.view',
+            'role.access', 'role.view',
+            'audit_log.access', 'audit_log.view',
+            'maintenance.access', 'maintenance.view',
+            'telegram_setting.access', 'telegram_setting.view',
+            'backend.root',
+        ];
+
+        return $this->coMotTrongCacQuyen($backendCodes);
     }
 
     public function maQuyenHieuLuc(): \Illuminate\Support\Collection

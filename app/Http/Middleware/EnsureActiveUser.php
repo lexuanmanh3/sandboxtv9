@@ -14,6 +14,9 @@ class EnsureActiveUser
         $user = $request->user();
         if ($user && ! $user->dangHoatDong()) {
             app(PermissionCacheService::class)->forgetUser((int) $user->getKey());
+            if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+                $user->currentAccessToken()->delete();
+            }
             Auth::logout();
             if ($request->hasSession()) {
                 $request->session()->invalidate();

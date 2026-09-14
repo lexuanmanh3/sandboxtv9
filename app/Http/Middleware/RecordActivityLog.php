@@ -18,6 +18,10 @@ class RecordActivityLog
         'api_key', 'api_password', 'pin', 'card_pin', 'otp',
     ];
 
+    private const PHONE_KEYS = [
+        'phone', 'so_dien_thoai', 'tai_khoan_nhan', 'phone_number', 'phonenumber', 'sdt',
+    ];
+
     /**
      * Tự động ghi lại hoạt động truy cập và thao tác trong Admin & API.
      */
@@ -48,8 +52,14 @@ class RecordActivityLog
             str_starts_with($path, 'build/') ||
             str_starts_with($path, 'vendor/') ||
             str_contains($path, 'favicon.ico') ||
-            $request->is('admin/maintenance/logs/live')
+            $request->is('admin/maintenance/logs/*') ||
+            $request->is('admin/maintenance/logs')
         ) {
+            return;
+        }
+
+        // Bỏ qua các request GET thông thường không có lỗi để tránh phình to database
+        if ($request->isMethod('GET') && !$exception) {
             return;
         }
 
@@ -116,8 +126,12 @@ class RecordActivityLog
 
         $result = [];
         foreach ($data as $key => $value) {
-            if (in_array(strtolower((string) $key), self::SENSITIVE_KEYS, true)) {
+            $lowerKey = strtolower((string) $key);
+            if (in_array($lowerKey, self::SENSITIVE_KEYS, true)) {
                 $result[$key] = '[REDACTED]';
+            } elseif (in_array($lowerKey, self::PHONE_KEYS, true) && is_string($value) && strlen($value) >= 7) {
+                // Che số điện thoại bảo vệ thông tin cá nhân khách hàng (VD: 098****88)
+                $result[$key] = substr($value, 0, 3) . str_repeat('*', max(1, strlen($value) - 5)) . substr($value, -2);
             } elseif (is_array($value)) {
                 $result[$key] = $this->sanitize($value);
             } else {

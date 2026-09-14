@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Quản lý Sản phẩm Nhà Cung Cấp')
+@section('title', 'tv9tech - Quản lý Sản phẩm Nhà Cung Cấp')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('backend/css/admin-accounts.css') }}">
@@ -244,8 +244,8 @@
           <span>Trạng thái</span>
           <select name="trang_thai">
             <option value="">Tất cả</option>
-            <option value="ACTIVE" @selected(($filters['trang_thai'] ?? '') === 'ACTIVE')>Hoạt động</option>
-            <option value="INACTIVE" @selected(($filters['trang_thai'] ?? '') === 'INACTIVE')>Tạm dừng</option>
+            <option value="hoat_dong" @selected(($filters['trang_thai'] ?? '') === 'hoat_dong' || ($filters['trang_thai'] ?? '') === 'ACTIVE')>Hoạt động</option>
+            <option value="tam_dung" @selected(($filters['trang_thai'] ?? '') === 'tam_dung' || ($filters['trang_thai'] ?? '') === 'INACTIVE')>Tạm dừng</option>
           </select>
         </label>
 
@@ -519,8 +519,8 @@
           <label>
             <span style="font-size: 13px; font-weight: 600;">Trạng thái</span>
             <select name="trang_thai" style="width: 100%; padding: 8px 12px; border: 1px solid var(--admin-slate-300); border-radius: 6px;">
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Tạm dừng</option>
+              <option value="hoat_dong">Hoạt động</option>
+              <option value="tam_dung">Tạm dừng</option>
             </select>
           </label>
         </div>
@@ -598,8 +598,8 @@
           <label>
             <span style="font-size: 13px; font-weight: 600;">Trạng thái</span>
             <select name="trang_thai" id="edit_trang_thai" style="width: 100%; padding: 8px 12px; border: 1px solid var(--admin-slate-300); border-radius: 6px;">
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Tạm dừng</option>
+              <option value="hoat_dong">Hoạt động</option>
+              <option value="tam_dung">Tạm dừng</option>
             </select>
           </label>
         </div>
@@ -836,7 +836,7 @@
               document.getElementById('edit_gia_nhap').value = item.gia_nhap || '';
               document.getElementById('edit_muc_uu_tien').value = item.muc_uu_tien || 100;
               document.getElementById('edit_san_pham_id').value = item.san_pham_id || '';
-              document.getElementById('edit_trang_thai').value = item.trang_thai || 'ACTIVE';
+              document.getElementById('edit_trang_thai').value = (item.trang_thai === 'INACTIVE' || item.trang_thai === 'tam_dung') ? 'tam_dung' : 'hoat_dong';
             }
 
             // Populate Modal Map

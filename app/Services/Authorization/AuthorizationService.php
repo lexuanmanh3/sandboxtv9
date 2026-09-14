@@ -19,11 +19,19 @@ class AuthorizationService
 
     public function allows(User $user, string $permission): bool
     {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
         return $this->codes($user)->containsStrict($permission);
     }
 
     public function allowsAny(User $user, array $permissions): bool
     {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
         return $this->codes($user)->intersect($permissions)->isNotEmpty();
     }
 }

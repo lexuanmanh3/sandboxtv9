@@ -15,7 +15,7 @@ final class NhaCungCapRoutingService
         return SanPhamNhaCungCap::query()
             ->with(['nhaCungCap', 'ketNoi.nhaCungCap'])
             ->where('san_pham_id', $donHang->san_pham_id)
-            ->where('trang_thai', 'ACTIVE')
+            ->whereIn('trang_thai', ['ACTIVE', 'hoat_dong'])
             ->whereHas('nhaCungCap', fn ($q) => $q->whereIn('trang_thai', ['ACTIVE', 'hoat_dong']))
             ->whereHas('ketNoi', fn ($q) => $q->whereIn('trang_thai', ['ACTIVE', 'hoat_dong']))
             ->whereNotIn('id', $daGoi)

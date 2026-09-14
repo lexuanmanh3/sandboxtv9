@@ -31,7 +31,7 @@ class KiemTraQuyenDaiLyApiService
          * Kiểm tra trạng thái sản phẩm.
          * Nếu sản phẩm bị tắt thì không cho tạo đơn.
          */
-        if ($sanPham->trang_thai !== 'hoat_dong') {
+        if (!in_array($sanPham->trang_thai, ['hoat_dong', 'ACTIVE'])) {
             return [
                 'duoc_phep' => false,
                 'ly_do' => 'Sản phẩm không hoạt động.',

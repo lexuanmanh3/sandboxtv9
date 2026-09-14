@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Quản lý Hóa đơn & Giao dịch')
+@section('title', 'tv9tech - Quản lý Hóa đơn & Giao dịch')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('backend/css/admin-accounts.css') }}">

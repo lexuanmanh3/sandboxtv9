@@ -58,12 +58,9 @@ class MaintenanceController extends Controller
         try {
             switch ($type) {
                 case 'application':
-                case 'AppUserFriendCache':
-                case 'Users':
-                case 'Discounts':
                     Cache::flush();
                     Artisan::call('cache:clear');
-                    $name = 'Bộ nhớ cache ứng dụng (Application Cache)';
+                    $name = 'Toàn bộ cache ứng dụng (Application Cache)';
                     break;
                 case 'views':
                     Artisan::call('view:clear');
@@ -78,21 +75,29 @@ class MaintenanceController extends Controller
                     $name = 'Bộ nhớ cache cấu hình (Config Cache)';
                     break;
                 case 'permissions':
-                case 'AbpZeroRolePermissions':
-                case 'AbpZeroUserPermissions':
+                    app(\App\Services\Authorization\PermissionCacheService::class)->clearAll();
                     Cache::forget('sp_permissions_cache');
-                    Cache::flush();
                     $name = 'Bộ nhớ phân quyền (Permissions Cache)';
                     break;
                 case 'providers':
-                    // Xóa cache trạng thái Circuit Breaker & Provider
-                    foreach (['circuit_breaker_*', 'ncc_provider_*'] as $pattern) {
-                        Cache::forget($pattern);
+                    // Xóa cache trạng thái Circuit Breaker & Provider cụ thể theo kết nối
+                    $ketNoiIds = \App\Models\KetNoiNhaCungCap::pluck('id');
+                    foreach ($ketNoiIds as $kId) {
+                        Cache::forget("circuit_breaker_fails_{$kId}");
+                        Cache::forget("circuit_breaker_tripped_{$kId}");
+                        Cache::forget("ncc_provider_{$kId}");
                     }
+                    Cache::forget('circuit_breaker_*');
                     $name = 'Bộ nhớ nhà cung cấp & Circuit Breaker';
                     break;
+                case 'products':
+                case 'discounts':
+                    Cache::forget('products_cache');
+                    Cache::forget('discounts_cache');
+                    $name = 'Bộ nhớ bảng giá & chiết khấu sản phẩm';
+                    break;
                 default:
-                    Cache::flush();
+                    Cache::forget($type);
                     $name = "Bộ nhớ cache '{$type}'";
                     break;
             }
@@ -149,24 +154,18 @@ class MaintenanceController extends Controller
     private function getCacheList(): array
     {
         return [
-            ['key' => 'AppUserFriendCache', 'name' => 'AppUserFriendCache', 'desc' => 'Bộ nhớ đệm danh sách bạn bè và liên hệ người dùng'],
-            ['key' => 'AspNet.Identity.SecurityStamp', 'name' => 'AspNet.Identity.SecurityStamp', 'desc' => 'Dấu bảo mật phiên đăng nhập và xác thực'],
-            ['key' => 'AbpUserSettingsCache', 'name' => 'AbpUserSettingsCache', 'desc' => 'Bộ nhớ đệm cài đặt tùy biến của người dùng'],
-            ['key' => 'AbpZeroUserPermissions', 'name' => 'AbpZeroUserPermissions', 'desc' => 'Bộ nhớ đệm quyền hạn người dùng'],
-            ['key' => 'AbpZeroRolePermissions', 'name' => 'AbpZeroRolePermissions', 'desc' => 'Bộ nhớ đệm danh sách quyền gán theo vai trò'],
-            ['key' => 'Users', 'name' => 'Users', 'desc' => 'Bộ nhớ đệm thông tin tài khoản người dùng'],
-            ['key' => 'AbpZeroLanguages', 'name' => 'AbpZeroLanguages', 'desc' => 'Bộ nhớ đệm danh mục ngôn ngữ hệ thống'],
-            ['key' => 'AbpZeroMultiTenantLocalizationDictionaryCache', 'name' => 'AbpZeroMultiTenantLocalizationDictionaryCache', 'desc' => 'Bộ nhớ từ điển đa ngôn ngữ'],
-            ['key' => 'Discounts', 'name' => 'Discounts', 'desc' => 'Bộ nhớ đệm chiết khấu và bảng giá sản phẩm'],
+            ['key' => 'permissions', 'name' => 'Permissions Cache', 'desc' => 'Bộ nhớ đệm phân quyền vai trò và người dùng'],
             ['key' => 'views', 'name' => 'View / Blade Compiled Cache', 'desc' => 'Bộ nhớ đệm giao diện mẫu Blade HTML'],
             ['key' => 'routes', 'name' => 'Route URL Cache', 'desc' => 'Bộ nhớ đệm định tuyến URL và Middleware'],
             ['key' => 'config', 'name' => 'Config Cache', 'desc' => 'Bộ nhớ đệm tệp cấu hình hệ thống (.env & config)'],
             ['key' => 'providers', 'name' => 'Provider & Circuit Breaker', 'desc' => 'Bộ nhớ đệm kết nối API và trạng thái ngắt mạch sự cố'],
+            ['key' => 'products', 'name' => 'Products & Discounts Cache', 'desc' => 'Bộ nhớ đệm chiết khấu và danh mục sản phẩm'],
         ];
     }
 
     /**
      * Phân tích tệp nhật ký (laravel.log) thành mảng có cấu trúc và phân loại màu sắc.
+     * Đọc an toàn theo tail buffer tránh cạn kiệt bộ nhớ (OOM) khi file log dung lượng lớn.
      */
     private function parseLogFile(int $maxLines = 150): array
     {
@@ -175,7 +174,23 @@ class MaintenanceController extends Controller
             return [];
         }
 
-        $content = File::get($logFile);
+        // Đọc tail buffer tối đa 256KB cuối file tránh tràn bộ nhớ
+        $fileSize = (int) @filesize($logFile);
+        $chunkSize = 256 * 1024;
+        $handle = @fopen($logFile, 'rb');
+        if (!$handle) {
+            return [];
+        }
+
+        if ($fileSize > $chunkSize) {
+            fseek($handle, -$chunkSize, SEEK_END);
+        }
+        $content = '';
+        while (!feof($handle)) {
+            $content .= fread($handle, 8192);
+        }
+        fclose($handle);
+
         $rawLines = explode("\n", trim($content));
         $rawLines = array_slice($rawLines, -$maxLines);
 

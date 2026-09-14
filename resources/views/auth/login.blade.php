@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VietFin - Đăng nhập hệ thống</title>
+  <title>tv9tech - Đăng nhập hệ thống</title>
 
   {{-- Tailwind CSS (framework layout cho trang này) --}}
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -117,13 +117,12 @@
 
   {{-- ===== HEADER — LOGO ===== --}}
   <header class="w-full flex justify-center pt-margin-desktop">
-    <div class="flex items-center gap-3">
+    <div class="flex items-center justify-center">
       <img
-        src="{{ asset('frontend/img/TV9TECH_logo_transparent – Đã sửa.png') }}"
-        alt="VietFin Logo"
-        class="w-10 h-10 object-contain"
+        src="{{ asset('backend/img/logo.png') }}"
+        alt="tv9tech Logo"
+        class="h-10 w-auto object-contain"
       />
-      <span class="font-headline-md text-headline-md text-primary font-bold tracking-tight">VietFin</span>
     </div>
   </header>
 
@@ -291,7 +290,7 @@
         Liên hệ
       </a>
     </div>
-    <p class="font-label-sm text-label-sm text-outline">© 2024 VietFin. Tất cả quyền được bảo hộ.</p>
+    <p class="font-label-sm text-label-sm text-outline">© 2024 tv9tech. Tất cả quyền được bảo hộ.</p>
   </footer>
 
   {{-- JS riêng cho trang login (toggle password, animation, loading state) --}}

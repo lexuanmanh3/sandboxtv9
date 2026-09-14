@@ -70,5 +70,8 @@ class Kernel extends HttpKernel
         'quyen' => \App\Http\Middleware\KiemTraQuyen::class,
         'active' => \App\Http\Middleware\EnsureActiveUser::class,
         'activity.log' => \App\Http\Middleware\RecordActivityLog::class,
+        'b2b.hmac' => \App\Http\Middleware\VerifyPartnerHmacSignature::class,
+        'b2b.ip' => \App\Http\Middleware\VerifyPartnerIpAllowlist::class,
+        'b2b.throttle' => \App\Http\Middleware\B2bThrottleRequests::class,
     ];
 }

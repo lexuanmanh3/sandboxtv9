@@ -37,7 +37,21 @@ class StoreLoaiSanPhamRequest extends FormRequest
             'thu_tu' => ['nullable', 'integer', 'min:0'],
             // NOTE: hinh_anh hien luu duong dan/URL dang text hoac upload truc tiep qua hinh_anh_file.
             'hinh_anh' => ['nullable', 'string', 'max:255'],
-            'hinh_anh_file' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
+            'hinh_anh_file' => [
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpeg,png,jpg,webp',
+                'max:5120',
+                function ($attribute, $value, $fail) {
+                    if ($value instanceof \Illuminate\Http\UploadedFile) {
+                        $name = strtolower($value->getClientOriginalName());
+                        if (preg_match('/\.(php[0-9]?|phtml|phar|exe|sh|cgi|bat|cmd|pl)(\.|$)/i', $name)) {
+                            $fail('Tên tệp không được chứa phần mở rộng thực thi hoặc mã nguồn.');
+                        }
+                    }
+                },
+            ],
             'mo_ta' => ['nullable', 'string'],
         ];
     }

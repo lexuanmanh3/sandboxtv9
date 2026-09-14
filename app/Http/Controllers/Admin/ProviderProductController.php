@@ -180,10 +180,11 @@ class ProviderProductController extends Controller
      */
     public function toggleStatus(SanPhamNhaCungCap $providerProduct): RedirectResponse
     {
-        $newStatus = in_array($providerProduct->trang_thai, ['ACTIVE', 'hoat_dong']) ? 'INACTIVE' : 'ACTIVE';
+        $newStatus = in_array($providerProduct->trang_thai, ['ACTIVE', 'hoat_dong']) ? 'tam_dung' : 'hoat_dong';
         $providerProduct->update(['trang_thai' => $newStatus]);
+        $statusText = $newStatus === 'hoat_dong' ? 'Hoạt động' : 'Tạm dừng';
 
-        return back()->with('success', "Đã chuyển trạng thái mã '{$providerProduct->ma_san_pham_ncc}' sang {$newStatus}.");
+        return back()->with('success', "Đã chuyển trạng thái mã '{$providerProduct->ma_san_pham_ncc}' sang {$statusText}.");
     }
 
     /**
@@ -281,7 +282,7 @@ class ProviderProductController extends Controller
                         'menh_gia_ncc' => (float) $amount,
                         'gia_nhap' => data_get($item, 'price') ? (float) data_get($item, 'price') : ($mapping->gia_nhap ?: (float) $amount),
                         'ty_le_chiet_khau' => data_get($item, 'discount') ? (float) data_get($item, 'discount') : ($mapping->ty_le_chiet_khau ?: 0),
-                        'trang_thai' => 'ACTIVE',
+                        'trang_thai' => 'hoat_dong',
                         'du_lieu_mo_rong_json' => is_array($item) ? $item : [],
                         'dong_bo_luc' => now(),
                     ]);

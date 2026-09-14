@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VietFin - Đăng ký tài khoản</title>
+  <title>tv9tech - Đăng ký tài khoản</title>
 
   <link rel="stylesheet" href="{{ asset('frontend/css/fonts.css') }}">
   <link rel="stylesheet" href="{{ asset('assets/css/root.css') }}">
@@ -20,7 +20,7 @@
       <header class="register-brand">
         <div class="register-brand__mark">
           <x-icon name="account_balance_wallet" />
-          <h1>VietFin</h1>
+          <h1>tv9tech</h1>
         </div>
         <p>Bắt đầu hành trình thịnh vượng cùng chúng tôi</p>
       </header>
@@ -92,7 +92,7 @@
                 id="email"
                 name="email"
                 value="{{ old('email') }}"
-                placeholder="example@vietfin.vn"
+                placeholder="example@tv9tech.vn"
                 autocomplete="email"
               />
             </div>
@@ -177,7 +177,7 @@
 
           <label class="terms-row" for="terms">
             <input id="terms" type="checkbox" required />
-            <span>Tôi đồng ý với các <a href="#">Điều khoản & Chính sách</a> của VietFin.</span>
+            <span>Tôi đồng ý với các <a href="#">Điều khoản & Chính sách</a> của tv9tech.</span>
           </label>
 
           <button class="register-submit" type="submit">
@@ -205,9 +205,9 @@
   </main>
 
   <footer class="register-footer">
-    <strong>VietFin</strong>
+    <strong>tv9tech</strong>
     <div class="register-footer__links">
-      <p>© 2024 VietFin. Tất cả quyền được bảo hộ.</p>
+      <p>© 2024 tv9tech. Tất cả quyền được bảo hộ.</p>
       <a href="#">Điều khoản sử dụng</a>
       <a href="#">Chính sách bảo mật</a>
       <a href="#">Liên hệ</a>

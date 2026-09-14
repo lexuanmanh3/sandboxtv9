@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-final class TelegramAlertService
+class TelegramAlertService
 {
     /**
      * Gửi tin nhắn văn bản (hỗ trợ HTML / Markdown) đến Telegram ChatID.
@@ -18,7 +18,7 @@ final class TelegramAlertService
     public function sendMessage(string $chatId, string $message, ?string $botToken = null): bool
     {
         $dbConfig = CauHinhThongBao::layCauHinhTelegram();
-        $token = $botToken ?: $dbConfig->bot_token ?: config('services.telegram.bot_token', env('TELEGRAM_BOT_TOKEN'));
+        $token = $botToken ?: $dbConfig->bot_token ?: config('services.telegram.bot_token');
         if (!$token || !$chatId) {
             Log::warning('TelegramAlertService: Thiếu Bot Token hoặc ChatID để gửi cảnh báo.', [
                 'has_token' => (bool) $token,

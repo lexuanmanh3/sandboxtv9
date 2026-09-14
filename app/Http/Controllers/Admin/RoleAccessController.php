@@ -49,6 +49,11 @@ class RoleAccessController extends Controller
             'mac_dinh' => ['nullable', 'boolean'],
         ]);
 
+        $currentUser = $request->user();
+        if ($role->ma_vai_tro === 'admin' && ! $currentUser?->isAdmin()) {
+            abort(403, 'Chỉ Quản trị viên tối cao mới có thể chỉnh sửa vai trò Quản trị viên.');
+        }
+
         $managedPermissionIds = $this->managedAccessPermissions()->pluck('id');
         $selectedIds = $tree->normalize($validated['quyen'] ?? []);
 

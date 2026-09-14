@@ -25,6 +25,11 @@ class DaiLyApi extends Model
         'so_dien_thoai',
         'ho',
         'ten',
+        'tinh_thanh',
+        'quan_huyen',
+        'phuong_xa',
+        'dia_chi_chi_tiet',
+        'thong_tin_lien_he',
         'ngay_ky_hop_dong',
         'so_hop_dong',
         'email_ky_thuat',
@@ -35,6 +40,12 @@ class DaiLyApi extends Model
         'trang_thai',
     ];
 
+    protected $casts = [
+        'thong_tin_lien_he' => 'array',
+        'ky_doi_soat' => 'integer',
+        'ngay_ky_hop_dong' => 'date',
+    ];
+
     /**
      * Một API Partner có một cấu hình API.
      * Dùng để lấy client_id, secret, IP whitelist, hạn mức.
@@ -42,6 +53,51 @@ class DaiLyApi extends Model
     public function cauHinhApi()
     {
         return $this->hasOne(CauHinhApiDaiLy::class, 'dai_ly_api_id');
+    }
+
+    public function bangGia()
+    {
+        return $this->hasMany(BangGiaDaiLy::class, 'dai_ly_api_id');
+    }
+
+    public function khoanGiuHanMuc()
+    {
+        return $this->hasMany(KhoanGiuHanMuc::class, 'dai_ly_api_id');
+    }
+
+    public function soPhatSinhCongNo()
+    {
+        return $this->hasMany(SoPhatSinhCongNo::class, 'dai_ly_api_id');
+    }
+
+    public function thanhToanCongNo()
+    {
+        return $this->hasMany(ThanhToanCongNo::class, 'dai_ly_api_id');
+    }
+
+    public function kyDoiSoat()
+    {
+        return $this->hasMany(KyDoiSoat::class, 'dai_ly_api_id');
+    }
+
+    public function dieuChinhCongNo()
+    {
+        return $this->hasMany(DieuChinhCongNo::class, 'dai_ly_api_id');
+    }
+
+    public function webhookOutbox()
+    {
+        return $this->hasMany(WebhookOutbox::class, 'dai_ly_api_id');
+    }
+
+    public function donHang()
+    {
+        return $this->hasMany(DonHang::class, 'dai_ly_api_id');
+    }
+
+    public function nguoiDung()
+    {
+        return $this->belongsTo(User::class, 'nguoi_dung_id');
     }
 
     /**
@@ -67,29 +123,29 @@ class DaiLyApi extends Model
         )->withTimestamps();
     }
     
-            /**
-         * Các loại sản phẩm mà API Partner được phép dùng.
-         */
-        public function loaiSanPhamDuocPhep()
-        {
-            return $this->hasMany(DaiLyApiLoaiSanPhamDuocPhep::class, 'dai_ly_api_id');
-        }
+    /**
+     * Các loại sản phẩm mà API Partner được phép dùng.
+     */
+    public function loaiSanPhamDuocPhep()
+    {
+        return $this->hasMany(DaiLyApiLoaiSanPhamDuocPhep::class, 'dai_ly_api_id');
+    }
 
-        /**
-         * Lấy thẳng danh sách loại sản phẩm được phép dùng.
-         * Ví dụ: $partner->loaiSanPham()->get()
-         */
-        public function loaiSanPham()
-        {
-            return $this->belongsToMany(
-                LoaiSanPham::class,
-                'dai_ly_api_loai_san_pham_duoc_phep',
-                'dai_ly_api_id',
-                'loai_san_pham_id'
-            )->withTimestamps();
-        }
+    /**
+     * Lấy thẳng danh sách loại sản phẩm được phép dùng.
+     * Ví dụ: $partner->loaiSanPham()->get()
+     */
+    public function loaiSanPham()
+    {
+        return $this->belongsToMany(
+            LoaiSanPham::class,
+            'dai_ly_api_loai_san_pham_duoc_phep',
+            'dai_ly_api_id',
+            'loai_san_pham_id'
+        )->withTimestamps();
+    }
 
-        /**
+    /**
      * Các sản phẩm cụ thể mà API Partner được phép dùng.
      *
      * Ví dụ:
@@ -115,5 +171,4 @@ class DaiLyApi extends Model
             'san_pham_id'
         )->withTimestamps();
     }
-
 }

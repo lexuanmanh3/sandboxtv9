@@ -7,6 +7,8 @@ use App\Models\VaiTro;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -56,6 +58,15 @@ class AuthController extends Controller
         ]);
 
         $dinhDanh = trim($request->ten_dang_nhap);
+        $throttleKey = Str::transliterate(Str::lower($dinhDanh) . '|' . $request->ip());
+
+        // Chống brute-force: giới hạn số lần thử theo tài khoản và IP (tối đa 5 lần / 60 giây)
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return back()
+                ->withInput($request->only('ten_dang_nhap'))
+                ->withErrors(['ten_dang_nhap' => "Quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau {$seconds} giây."]);
+        }
 
         // Tìm tài khoản: thử khớp ten_dang_nhap trước, sau đó thử email
         $user = User::where('ten_dang_nhap', $dinhDanh)
@@ -64,6 +75,7 @@ class AuthController extends Controller
 
         // Kiểm tra tài khoản tồn tại và mật khẩu hợp lệ
         if (! $user || ! Hash::check($request->password, $user->password)) {
+            RateLimiter::hit($throttleKey, 60);
             return back()
                 ->withInput($request->only('ten_dang_nhap')) 
                 ->withErrors(['ten_dang_nhap' => 'Tên đăng nhập hoặc mật khẩu không đúng.']);
@@ -71,6 +83,7 @@ class AuthController extends Controller
 
         // Chặn tài khoản bị khóa thủ công
         if ($user->bi_khoa) {
+            RateLimiter::hit($throttleKey, 60);
             return back()
                 ->withInput($request->only('ten_dang_nhap'))
                 ->withErrors(['ten_dang_nhap' => 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.']);
@@ -78,12 +91,16 @@ class AuthController extends Controller
 
         // Chặn tài khoản không ở trạng thái hoạt động
         if ($user->trang_thai !== 'hoat_dong') {
+            RateLimiter::hit($throttleKey, 60);
             return back()
                 ->withInput($request->only('ten_dang_nhap'))
                 ->withErrors(['ten_dang_nhap' => 'Tài khoản chưa được kích hoạt hoặc đang tạm khóa.']);
         }
 
-        // Đăng nhập thành công — ghi nhớ phiên nếu tick "nhớ tôi"
+        // Đăng nhập thành công — xóa bộ đếm brute force
+        RateLimiter::clear($throttleKey);
+
+        // Ghi nhớ phiên nếu tick "nhớ tôi"
         Auth::login($user, $request->boolean('nho_mat_khau'));
 
         // Cập nhật thời gian đăng nhập gần nhất
@@ -255,10 +272,29 @@ class AuthController extends Controller
      */
     private function duongDanSauDangNhap(User $user): ?string
     {
+        if ($user->isAdmin()) {
+            return route('admin.dashboard');
+        }
+
         $adminRoutes = [
-            'dashboard.view' => route('admin.dashboard'),
-            'account.view' => route('admin.accounts'),
-            'role.view' => route('admin.roles'),
+            'dashboard.view'            => route('admin.dashboard'),
+            'order.view'                => route('admin.orders'),
+            'b2b_partner.view'          => route('admin.b2b.partners.index'),
+            'b2b_order.view'            => route('admin.b2b.orders.index'),
+            'b2b_credit.view'           => route('admin.b2b.credit-payments.index'),
+            'b2b_reconciliation.view'   => route('admin.b2b.reconciliations.index'),
+            'b2b_webhook.view'          => route('admin.b2b.webhooks.index'),
+            'product.view'              => route('admin.products'),
+            'loai_san_pham.view'        => route('admin.categories'),
+            'dich_vu.view'              => route('admin.services'),
+            'service_config.view'       => route('admin.providers'),
+            'provider_product.view'     => route('admin.provider-products'),
+            'provider_error_code.view'  => route('admin.provider-error-codes'),
+            'account.view'              => route('admin.accounts'),
+            'role.view'                 => route('admin.roles'),
+            'audit_log.view'            => route('admin.audit-logs'),
+            'maintenance.view'          => route('admin.maintenance'),
+            'telegram_setting.view'     => route('admin.telegram-settings'),
         ];
 
         foreach ($adminRoutes as $permission => $url) {
@@ -268,8 +304,10 @@ class AuthController extends Controller
         }
 
         $frontendRoutes = [
-            'frontend.home.access' => route('frontend.home'),
+            'frontend.home.access'  => route('frontend.home'),
+            'frontend.home.view'    => route('frontend.home'),
             'frontend.topup.access' => route('frontend.topup'),
+            'frontend.topup.view'   => route('frontend.topup'),
         ];
 
         foreach ($frontendRoutes as $permission => $url) {

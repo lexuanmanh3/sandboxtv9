@@ -40,7 +40,7 @@ class MaLoiNhaCungCap extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('trang_thai', 'ACTIVE');
+        return $query->whereIn('trang_thai', ['hoat_dong', 'ACTIVE']);
     }
 
     public function scopeSearch(Builder $query, ?string $keyword): Builder

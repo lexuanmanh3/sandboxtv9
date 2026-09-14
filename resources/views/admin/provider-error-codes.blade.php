@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Quản lý Mã lỗi Nhà Cung Cấp')
+@section('title', 'tv9tech - Quản lý Mã lỗi Nhà Cung Cấp')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('backend/css/admin-accounts.css') }}">
@@ -241,8 +241,8 @@
           <span>Trạng thái</span>
           <select name="trang_thai">
             <option value="">Tất cả trạng thái</option>
-            <option value="ACTIVE" @selected(($filters['trang_thai'] ?? '') === 'ACTIVE')>Đang áp dụng (ACTIVE)</option>
-            <option value="INACTIVE" @selected(($filters['trang_thai'] ?? '') === 'INACTIVE')>Tạm dừng (INACTIVE)</option>
+            <option value="hoat_dong" @selected(($filters['trang_thai'] ?? '') === 'hoat_dong' || ($filters['trang_thai'] ?? '') === 'ACTIVE')>Hoạt động</option>
+            <option value="tam_dung" @selected(($filters['trang_thai'] ?? '') === 'tam_dung' || ($filters['trang_thai'] ?? '') === 'INACTIVE')>Tạm dừng</option>
           </select>
         </label>
         <button class="account-btn account-btn--primary" type="submit">
@@ -311,7 +311,7 @@
                         <x-icon name="edit" /> Sửa thông tin
                       </button>
                       <button type="button" data-action="toggle">
-                        <x-icon name="sync_alt" /> {{ $item->trang_thai === 'ACTIVE' ? 'Tạm dừng' : 'Kích hoạt' }}
+                        <x-icon name="sync_alt" /> {{ in_array($item->trang_thai, ['hoat_dong', 'ACTIVE']) ? 'Tạm dừng' : 'Kích hoạt' }}
                       </button>
                       <button type="button" data-action="delete" style="color: #dc2626;">
                         <x-icon name="delete" /> Xóa mã lỗi
@@ -355,8 +355,8 @@
                   {{ $item->thong_bao_goc ?: '-' }}
                 </td>
                 <td>
-                  <span class="account-status-pill {{ $item->trang_thai === 'ACTIVE' ? 'is-yes' : 'is-no' }}">
-                    {{ $item->trang_thai === 'ACTIVE' ? 'Kích hoạt' : 'Tạm dừng' }}
+                  <span class="account-status-pill {{ in_array($item->trang_thai, ['hoat_dong', 'ACTIVE']) ? 'is-yes' : 'is-no' }}">
+                    {{ in_array($item->trang_thai, ['hoat_dong', 'ACTIVE']) ? 'Hoạt động' : 'Tạm dừng' }}
                   </span>
                 </td>
                 <td style="font-size: 12px; color: #64748b; white-space: nowrap;">
@@ -478,8 +478,8 @@
             <label>
               <span>Trạng thái</span>
               <select name="trang_thai" id="fTrangThai">
-                <option value="ACTIVE">Kích hoạt (ACTIVE)</option>
-                <option value="INACTIVE">Tạm dừng (INACTIVE)</option>
+                <option value="hoat_dong">Hoạt động</option>
+                <option value="tam_dung">Tạm dừng</option>
               </select>
             </label>
           </div>
@@ -639,7 +639,7 @@
         document.getElementById('fThongBaoHienThi').value = '';
         document.getElementById('fThongBaoGoc').value = '';
         document.getElementById('fMoTa').value = '';
-        document.getElementById('fTrangThai').value = 'ACTIVE';
+        document.getElementById('fTrangThai').value = 'hoat_dong';
 
         openModal(errorCodeModal);
       });
@@ -668,7 +668,7 @@
           document.getElementById('fThongBaoHienThi').value = data.thong_bao_hien_thi || '';
           document.getElementById('fThongBaoGoc').value = data.thong_bao_goc || '';
           document.getElementById('fMoTa').value = data.mo_ta || '';
-          document.getElementById('fTrangThai').value = data.trang_thai || 'ACTIVE';
+          document.getElementById('fTrangThai').value = (data.trang_thai === 'INACTIVE' || data.trang_thai === 'tam_dung') ? 'tam_dung' : 'hoat_dong';
 
           openModal(errorCodeModal);
         } else if (action === 'toggle') {

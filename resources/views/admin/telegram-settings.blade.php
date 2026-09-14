@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'VietFin - Cấu hình Thông báo Telegram')
+@section('title', 'tv9tech - Cấu hình Thông báo Telegram')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('backend/css/admin-accounts.css') }}">
@@ -354,7 +354,7 @@
 @section('content')
   @php
     $currentUser = auth()->user();
-    $canEdit = $currentUser && ($currentUser->vai_tro === 'admin' || $currentUser->loai_tai_khoan === 'admin' || $currentUser->coQuyen('telegram_setting.update'));
+    $canEdit = $currentUser && ($currentUser->isAdmin() || $currentUser->coQuyen('telegram_setting.update'));
     $channelsList = $channels ?? [];
     $eventMap = $eventChannels ?? [];
   @endphp
@@ -427,7 +427,7 @@
             id="bot_token"
             name="bot_token"
             value="{{ old('bot_token', $config->bot_token) }}"
-            placeholder="Ví dụ: 8815830057:AAEVbFQtJXAofwJhTQaWuS273SfZmYUgxQ4"
+            placeholder="Ví dụ: 1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
             autocomplete="off"
             {{ $canEdit ? '' : 'disabled' }}
           >
@@ -656,7 +656,7 @@
 
         <div>
           <label class="tele-label" for="modalChannelChatId">Chat ID Telegram <span class="req">*</span></label>
-          <input class="tele-input" type="text" id="modalChannelChatId" placeholder="Ví dụ: -1005428010028 hoặc 8815830057">
+          <input class="tele-input" type="text" id="modalChannelChatId" placeholder="Ví dụ: -1001234567890 hoặc 123456789">
           <span class="tele-hint">Đảm bảo bạn đã thêm Bot vào nhóm này trước khi lưu.</span>
         </div>
 

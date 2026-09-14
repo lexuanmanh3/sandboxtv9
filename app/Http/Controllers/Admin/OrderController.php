@@ -226,62 +226,38 @@ class OrderController extends Controller
 
     /**
      * Admin hoàn tiền thủ công cho đơn hàng.
-     * Chỉ cho phép từ trạng thái hợp lệ: FAILED, MANUAL_REVIEW, PROVIDER_PENDING, PROCESSING.
-     * Dùng lockForUpdate() bên trong transaction để chống hoàn tiền 2 lần đồng thời.
+     * Sử dụng HoanTienDonHangService đảm bảo tính nguyên tử, thứ tự khóa,
+     * xác minh nguồn tiền và chống hoàn tiền trùng lặp.
      */
-    public function refund(Request $request, int $id, \App\Services\Topup\DonHangStateMachine $state): RedirectResponse
+    public function refund(Request $request, int $id, \App\Services\Topup\HoanTienDonHangService $refundService): RedirectResponse
     {
         $reason = trim((string) $request->input('ly_do_hoan_tien', 'Admin hoàn tiền thủ công'));
-
-        $donHang = null;
+        $admin = $request->user();
+        $adminName = $admin?->ten_dang_nhap ?? 'admin';
+        $adminId = $admin?->id;
 
         try {
-            DB::transaction(function () use ($id, $state, $reason, &$donHang) {
-                // lockForUpdate() bên trong transaction — chặn race condition hoàn tiền 2 lần
-                $donHang = DonHang::lockForUpdate()->findOrFail($id);
+            $donHang = $refundService->hoanTien(
+                orderId: $id,
+                actorType: 'admin',
+                actorId: $adminId,
+                actorName: $adminName,
+                reason: $reason
+            );
 
-                // Kiểm tra trạng thái SAU KHI đã lock (không tin dữ liệu trước lock)
-                $validRefundStatuses = ['FAILED', 'MANUAL_REVIEW', 'PROVIDER_PENDING', 'PROCESSING'];
-                $currentStatus = strtoupper((string) $donHang->trang_thai_don_hang);
-
-                if ($donHang->trang_thai_thanh_toan === 'REFUNDED' || $currentStatus === 'REFUNDED') {
-                    throw new \RuntimeException('Đơn hàng này đã được hoàn tiền từ trước.');
-                }
-
-                if (!in_array($currentStatus, $validRefundStatuses, true)) {
-                    throw new \RuntimeException("Không thể hoàn tiền đơn hàng ở trạng thái: {$currentStatus}.");
-                }
-
-                // Hoàn tiền vào ví người dùng nếu có tài khoản
-                if ($donHang->nguoi_dung_id && (float) $donHang->gia_ban > 0) {
-                    $this->viService->hoanTien(
-                        userId: $donHang->nguoi_dung_id,
-                        soTien: (float) $donHang->gia_ban,
-                        donHang: $donHang,
-                        moTa: "Hoàn tiền đơn hàng #{$donHang->ma_don_hang}: {$reason}"
-                    );
-                }
-
-                // Chuyển trạng thái qua state machine — KHÔNG ép trực tiếp bypass state machine
-                $adminName = auth()->user()?->ten_dang_nhap ?? 'admin';
-                $state->chuyen($donHang, \App\Enums\TrangThaiDonHang::REFUNDED, $reason, "admin_{$adminName}");
-                $donHang->update([
-                    'trang_thai_thanh_toan' => 'REFUNDED',
-                    'thong_bao_loi_he_thong' => $reason,
-                ]);
-
-                // Gửi thông báo Telegram về nhóm Admin/Kế toán
-                app(\App\Services\Alert\TelegramAlertService::class)->alertOrderRefunded(
-                    $donHang,
-                    $reason,
-                    $adminName
-                );
-            });
-        } catch (\RuntimeException $e) {
+            return back()->with('success', "Đã hoàn tiền thành công " . number_format((float) $donHang->gia_ban, 0, ',', '.') . "đ cho đơn hàng #{$donHang->ma_don_hang}.");
+        } catch (\App\Exceptions\Refund\OrderRefundException|\DomainException $e) {
             return back()->withErrors(['refund' => $e->getMessage()]);
-        }
+        } catch (\Throwable $e) {
+            $refCode = (string) \Illuminate\Support\Str::uuid();
+            \Illuminate\Support\Facades\Log::error("Lỗi hoàn tiền admin [Ref: {$refCode}]: " . $e->getMessage(), [
+                'ref_code' => $refCode,
+                'order_id' => $id,
+                'trace'    => $e->getTraceAsString(),
+            ]);
 
-        return back()->with('success', "Đã hoàn tiền thành công " . number_format($donHang->gia_ban, 0, ',', '.') . "đ cho đơn hàng #{$donHang->ma_don_hang}.");
+            return back()->withErrors(['refund' => "Có lỗi hệ thống xảy ra khi hoàn tiền (Mã tra cứu: {$refCode}). Vui lòng liên hệ kỹ thuật."]);
+        }
     }
 
 }

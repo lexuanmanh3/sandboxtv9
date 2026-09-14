@@ -55,7 +55,7 @@ class UpdateErrorCodeRequest extends FormRequest
                 ]),
             ],
             'mo_ta' => ['nullable', 'string', 'max:1000'],
-            'trang_thai' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])],
+            'trang_thai' => ['required', Rule::in(['hoat_dong', 'tam_dung', 'ACTIVE', 'INACTIVE'])],
         ];
     }
 

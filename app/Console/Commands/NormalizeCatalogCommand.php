@@ -110,7 +110,7 @@ class NormalizeCatalogCommand extends Command
                         'chiet_khau_phan_tram' => 0,
                         'don_vi' => 'VND',
                         'thu_tu' => $thuTu++,
-                        'trang_thai' => 'ACTIVE',
+                        'trang_thai' => 'hoat_dong',
                         'hien_thi_web_app' => true,
                     ]
                 );
@@ -155,7 +155,7 @@ class NormalizeCatalogCommand extends Command
                         'chiet_khau_phan_tram' => 0,
                         'don_vi' => 'VND',
                         'thu_tu' => $thuTu++,
-                        'trang_thai' => 'ACTIVE',
+                        'trang_thai' => 'hoat_dong',
                         'mo_ta' => $pkg['desc'],
                         'hien_thi_web_app' => true,
                     ]

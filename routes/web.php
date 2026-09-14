@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\MaintenanceController;
 use App\Http\Controllers\Admin\TelegramSettingController;
+use App\Http\Controllers\Admin\DashboardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -65,9 +66,7 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware(['auth', 'active']);
 
 // ===== QUẢN TRỊ =====
-Route::get('/admin', function () {
-    return view('admin.dashboard');
-})->name('admin.dashboard')->middleware(['auth', 'active', 'quyen:dashboard.view']);
+Route::get('/admin', [DashboardController::class, 'index'])->name('admin.dashboard')->middleware(['auth', 'active', 'quyen:dashboard.view']);
 
 // NOTE: Module quan ly tai khoan he thong dung quyen account.access.
 Route::middleware(['auth', 'active'])->group(function () {
@@ -112,16 +111,16 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/admin/categories/bulk-delete', [CategoryController::class, 'bulkDestroy'])->name('admin.categories.bulk-delete')->middleware('quyen:loai_san_pham.delete');
 });
 
-// NOTE: Module Nha cung cap & Ket noi API dung quyen service_config.access
+// NOTE: Module Nha cung cap & Ket noi API dung quyen service_config.*
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/admin/providers', [ProviderController::class, 'index'])->name('admin.providers')->middleware('quyen:service_config.access');
-    Route::post('/admin/providers', [ProviderController::class, 'store'])->name('admin.providers.store')->middleware('quyen:service_config.access');
-    Route::put('/admin/providers/{provider}', [ProviderController::class, 'update'])->name('admin.providers.update')->middleware('quyen:service_config.access');
-    Route::post('/admin/providers/{provider}/test-connection', [ProviderController::class, 'testConnection'])->name('admin.providers.test-connection')->middleware('quyen:service_config.access');
-    Route::patch('/admin/providers/{provider}/toggle-status', [ProviderController::class, 'toggleStatus'])->name('admin.providers.toggle-status')->middleware('quyen:service_config.access');
-    Route::match(['POST', 'PATCH'], '/admin/providers/{provider}/reset-circuit', [ProviderController::class, 'resetCircuitBreaker'])->name('admin.providers.reset-circuit')->middleware('quyen:service_config.access');
-    Route::delete('/admin/providers/{provider}', [ProviderController::class, 'destroy'])->name('admin.providers.destroy')->middleware('quyen:service_config.access');
-    Route::post('/admin/providers/bulk-delete', [ProviderController::class, 'bulkDestroy'])->name('admin.providers.bulk-delete')->middleware('quyen:service_config.access');
+    Route::get('/admin/providers', [ProviderController::class, 'index'])->name('admin.providers')->middleware('quyen:service_config.view');
+    Route::post('/admin/providers', [ProviderController::class, 'store'])->name('admin.providers.store')->middleware('quyen:service_config.create');
+    Route::put('/admin/providers/{provider}', [ProviderController::class, 'update'])->name('admin.providers.update')->middleware('quyen:service_config.update');
+    Route::post('/admin/providers/{provider}/test-connection', [ProviderController::class, 'testConnection'])->name('admin.providers.test-connection')->middleware('quyen:service_config.test');
+    Route::patch('/admin/providers/{provider}/toggle-status', [ProviderController::class, 'toggleStatus'])->name('admin.providers.toggle-status')->middleware('quyen:service_config.update');
+    Route::match(['POST', 'PATCH'], '/admin/providers/{provider}/reset-circuit', [ProviderController::class, 'resetCircuitBreaker'])->name('admin.providers.reset-circuit')->middleware('quyen:service_config.reset_circuit');
+    Route::delete('/admin/providers/{provider}', [ProviderController::class, 'destroy'])->name('admin.providers.destroy')->middleware('quyen:service_config.delete');
+    Route::post('/admin/providers/bulk-delete', [ProviderController::class, 'bulkDestroy'])->name('admin.providers.bulk-delete')->middleware('quyen:service_config.delete');
 });
 
 // NOTE: Module San pham — phân quyền chi tiết theo hành động
@@ -190,6 +189,38 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/admin/telegram-settings', [TelegramSettingController::class, 'index'])->name('admin.telegram-settings')->middleware('quyen:telegram_setting.view');
     Route::put('/admin/telegram-settings', [TelegramSettingController::class, 'update'])->name('admin.telegram-settings.update')->middleware('quyen:telegram_setting.update');
     Route::post('/admin/telegram-settings/test', [TelegramSettingController::class, 'testConnection'])->name('admin.telegram-settings.test')->middleware('quyen:telegram_setting.test');
+});
+
+// ===== MODULE B2B PARTNER HUB =====
+Route::middleware(['auth', 'active'])->prefix('admin/b2b')->name('admin.b2b.')->group(function () {
+    // Đại lý API
+    Route::get('/partners', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'index'])->name('partners.index')->middleware('quyen:b2b_partner.view');
+    Route::post('/partners', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'store'])->name('partners.store')->middleware('quyen:b2b_partner.create');
+    Route::put('/partners/{id}', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'update'])->name('partners.update')->middleware('quyen:b2b_partner.update');
+    Route::post('/partners/{id}/rotate-key', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'rotateKey'])->name('partners.rotate-key')->middleware('quyen:b2b_partner.rotate_key');
+    Route::post('/partners/{id}/revoke-key', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'revokeKey'])->name('partners.revoke-key')->middleware('quyen:b2b_partner.rotate_key');
+    Route::post('/partners/{id}/pricing', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'savePricing'])->name('partners.pricing')->middleware('quyen:b2b_partner.pricing');
+
+    // Đơn hàng B2B
+    Route::get('/orders', [\App\Http\Controllers\Admin\B2B\B2bOrderManagementController::class, 'index'])->name('orders.index')->middleware('quyen:b2b_order.view');
+    Route::get('/orders/{id}', [\App\Http\Controllers\Admin\B2B\B2bOrderManagementController::class, 'show'])->name('orders.show')->middleware('quyen:b2b_order.view');
+
+    // Công nợ & Thanh toán
+    Route::get('/credit-payments', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'index'])->name('credit-payments.index')->middleware('quyen:b2b_credit.view');
+    Route::post('/credit-payments/payment', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'storePayment'])->name('credit-payments.payment')->middleware('quyen:b2b_credit.payment');
+    Route::post('/credit-payments/adjustment', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'storeAdjustment'])->name('credit-payments.adjustment')->middleware('quyen:b2b_credit.adjustment');
+
+    // Kỳ đối soát
+    Route::get('/reconciliations', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'index'])->name('reconciliations.index')->middleware('quyen:b2b_reconciliation.view');
+    Route::post('/reconciliations', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'store'])->name('reconciliations.store')->middleware('quyen:b2b_reconciliation.create');
+    Route::get('/reconciliations/{id}', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'show'])->name('reconciliations.show')->middleware('quyen:b2b_reconciliation.view');
+    Route::post('/reconciliations/{id}/lock', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'lock'])->name('reconciliations.lock')->middleware('quyen:b2b_reconciliation.lock');
+    Route::post('/reconciliations/{id}/recalculate', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'recalculate'])->name('reconciliations.recalculate')->middleware('quyen:b2b_reconciliation.recalculate');
+    Route::get('/reconciliations/{id}/export', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'exportExcel'])->name('reconciliations.export')->middleware('quyen:b2b_reconciliation.export');
+
+    // Lịch sử webhook
+    Route::get('/webhooks', [\App\Http\Controllers\Admin\B2B\WebhookManagementController::class, 'index'])->name('webhooks.index')->middleware('quyen:b2b_webhook.view');
+    Route::post('/webhooks/{id}/retry', [\App\Http\Controllers\Admin\B2B\WebhookManagementController::class, 'retry'])->name('webhooks.retry')->middleware('quyen:b2b_webhook.retry');
 });
 
 

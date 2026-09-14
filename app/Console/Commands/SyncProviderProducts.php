@@ -47,7 +47,7 @@ class SyncProviderProducts extends Command
                     'san_pham_id' => $product->id, 'nha_cung_cap_id' => $connection->nha_cung_cap_id,
                     'ma_nha_mang_ncc' => $telco, 'loai_dich_vu_ncc' => data_get($item, 'serviceType'),
                     'loai_thue_bao' => strtoupper((string) data_get($item, 'telcoServiceType', 'PREPAID')),
-                    'menh_gia_ncc' => $amount, 'trang_thai' => 'ACTIVE', 'du_lieu_mo_rong_json' => $item,
+                    'menh_gia_ncc' => $amount, 'trang_thai' => 'hoat_dong', 'du_lieu_mo_rong_json' => $item,
                     'dong_bo_luc' => now(),
                 ])->save();
                 $wasNew ? $created++ : $updated++;

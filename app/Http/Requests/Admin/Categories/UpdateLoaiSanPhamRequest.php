@@ -36,7 +36,21 @@ class UpdateLoaiSanPhamRequest extends FormRequest
             'trang_thai' => ['required', Rule::in(array_keys($this->statuses()))],
             'thu_tu' => ['nullable', 'integer', 'min:0'],
             'hinh_anh' => ['nullable', 'string', 'max:255'],
-            'hinh_anh_file' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
+            'hinh_anh_file' => [
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpeg,png,jpg,webp',
+                'max:5120',
+                function ($attribute, $value, $fail) {
+                    if ($value instanceof \Illuminate\Http\UploadedFile) {
+                        $name = strtolower($value->getClientOriginalName());
+                        if (preg_match('/\.(php[0-9]?|phtml|phar|exe|sh|cgi|bat|cmd|pl)(\.|$)/i', $name)) {
+                            $fail('Tên tệp không được chứa phần mở rộng thực thi hoặc mã nguồn.');
+                        }
+                    }
+                },
+            ],
             'mo_ta' => ['nullable', 'string'],
         ];
     }
