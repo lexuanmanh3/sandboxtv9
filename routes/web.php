@@ -201,6 +201,15 @@ Route::middleware(['auth', 'active'])->prefix('admin/b2b')->name('admin.b2b.')->
     Route::post('/partners/{id}/revoke-key', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'revokeKey'])->name('partners.revoke-key')->middleware('quyen:b2b_partner.rotate_key');
     Route::post('/partners/{id}/pricing', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'savePricing'])->name('partners.pricing')->middleware('quyen:b2b_partner.pricing');
 
+    // Cấu hình tuyến dịch vụ
+    Route::get('/routing-configs', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'index'])->name('routing-configs.index')->middleware('quyen:b2b_routing.view');
+    Route::get('/routing-configs/create', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'create'])->name('routing-configs.create')->middleware('quyen:b2b_routing.create');
+    Route::post('/routing-configs', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'store'])->name('routing-configs.store')->middleware('quyen:b2b_routing.create');
+    Route::get('/routing-configs/{routing_config}/edit', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'edit'])->name('routing-configs.edit')->middleware('quyen:b2b_routing.update');
+    Route::put('/routing-configs/{routing_config}', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'update'])->name('routing-configs.update')->middleware('quyen:b2b_routing.update');
+    Route::delete('/routing-configs/{routing_config}', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'destroy'])->name('routing-configs.destroy')->middleware('quyen:b2b_routing.delete');
+
+
     // Đơn hàng B2B
     Route::get('/orders', [\App\Http\Controllers\Admin\B2B\B2bOrderManagementController::class, 'index'])->name('orders.index')->middleware('quyen:b2b_order.view');
     Route::get('/orders/{id}', [\App\Http\Controllers\Admin\B2B\B2bOrderManagementController::class, 'show'])->name('orders.show')->middleware('quyen:b2b_order.view');
@@ -209,6 +218,11 @@ Route::middleware(['auth', 'active'])->prefix('admin/b2b')->name('admin.b2b.')->
     Route::get('/credit-payments', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'index'])->name('credit-payments.index')->middleware('quyen:b2b_credit.view');
     Route::post('/credit-payments/payment', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'storePayment'])->name('credit-payments.payment')->middleware('quyen:b2b_credit.payment');
     Route::post('/credit-payments/adjustment', [\App\Http\Controllers\Admin\B2B\CreditPaymentController::class, 'storeAdjustment'])->name('credit-payments.adjustment')->middleware('quyen:b2b_credit.adjustment');
+
+    // Vận hành & Xử lý sự cố
+    Route::get('/operations/provider-calls', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'providerCalls'])->name('operations.provider-calls')->middleware('quyen:b2b_operation.view');
+    Route::get('/operations/credit-holds', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'creditHolds'])->name('operations.credit-holds')->middleware('quyen:b2b_operation.view');
+    Route::post('/operations/credit-holds/{id}/release', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'releaseCreditHold'])->name('operations.credit-holds.release')->middleware('quyen:b2b_operation.release_hold');
 
     // Kỳ đối soát
     Route::get('/reconciliations', [\App\Http\Controllers\Admin\B2B\ReconciliationController::class, 'index'])->name('reconciliations.index')->middleware('quyen:b2b_reconciliation.view');

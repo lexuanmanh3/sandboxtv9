@@ -70,6 +70,11 @@ class LanGoiNhaCungCap extends Model
         return $this->belongsTo(KetNoiNhaCungCap::class, 'ket_noi_nha_cung_cap_id');
     }
 
+    public function ketNoiNhaCungCap()
+    {
+        return $this->belongsTo(KetNoiNhaCungCap::class, 'ket_noi_nha_cung_cap_id');
+    }
+
     public function sanPhamNhaCungCap()
     {
         return $this->belongsTo(SanPhamNhaCungCap::class, 'san_pham_nha_cung_cap_id');

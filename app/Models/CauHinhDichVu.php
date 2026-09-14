@@ -78,4 +78,25 @@ class CauHinhDichVu extends Model
     {
         return $this->belongsTo(SanPham::class, 'san_pham_id');
     }
+
+    /**
+     * Cấu hình áp dụng cho đại lý API cụ thể.
+     */
+    public function daiLyApi()
+    {
+        return $this->belongsTo(DaiLyApi::class, 'dai_ly_ap_dung_id');
+    }
+
+    public function daiLyApDung()
+    {
+        return $this->belongsTo(DaiLyApi::class, 'dai_ly_ap_dung_id');
+    }
+
+    /**
+     * Cấu hình áp dụng cho tài khoản người dùng cụ thể.
+     */
+    public function taiKhoan()
+    {
+        return $this->belongsTo(User::class, 'tai_khoan_ap_dung_id');
+    }
 }

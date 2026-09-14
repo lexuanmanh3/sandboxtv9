@@ -9,7 +9,7 @@
 /vendor
 .env
 .env.*
-!.env.example
+!/.env.example
 .phpunit.result.cache
 auth.json
 Homestead.json
@@ -27,3 +27,8 @@ yarn-error.log
 *.old
 
 *.zip
+
+# Ignore nested clone inside lang
+/lang/*
+/lang/.*
+!/lang/en/

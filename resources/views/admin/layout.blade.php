@@ -57,7 +57,9 @@
         $canAccessB2bCredit = $isAdmin || $currentUser?->coQuyen('b2b_credit.view');
         $canAccessB2bReconciliation = $isAdmin || $currentUser?->coQuyen('b2b_reconciliation.view');
         $canAccessB2bWebhooks = $isAdmin || $currentUser?->coQuyen('b2b_webhook.view');
-        $canAccessB2bGroup = $canAccessB2bPartners || $canAccessB2bOrders || $canAccessB2bCredit || $canAccessB2bReconciliation || $canAccessB2bWebhooks;
+        $canAccessB2bRouting = $isAdmin || $currentUser?->coQuyen('b2b_routing.view');
+        $canAccessB2bOperation = $isAdmin || $currentUser?->coQuyen('b2b_operation.view');
+        $canAccessB2bGroup = $canAccessB2bPartners || $canAccessB2bOrders || $canAccessB2bCredit || $canAccessB2bReconciliation || $canAccessB2bWebhooks || $canAccessB2bRouting || $canAccessB2bOperation;
 
         $canAccessOrders = $isAdmin || $currentUser?->coQuyen('order.view');
 
@@ -147,6 +149,9 @@
               @if ($canAccessB2bPartners)
                 <a class="{{ request()->routeIs('admin.b2b.partners.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.partners.index') }}">Đại lý API</a>
               @endif
+              @if ($canAccessB2bRouting)
+                <a class="{{ request()->routeIs('admin.b2b.routing-configs.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.routing-configs.index') }}">Cấu hình tuyến dịch vụ</a>
+              @endif
               @if ($canAccessB2bOrders)
                 <a class="{{ request()->routeIs('admin.b2b.orders.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.orders.index') }}">Đơn hàng B2B</a>
               @endif
@@ -155,6 +160,10 @@
               @endif
               @if ($canAccessB2bReconciliation)
                 <a class="{{ request()->routeIs('admin.b2b.reconciliations.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.reconciliations.index') }}">Kỳ đối soát</a>
+              @endif
+              @if ($canAccessB2bOperation)
+                <a class="{{ request()->routeIs('admin.b2b.operations.provider-calls') ? 'is-active' : '' }}" href="{{ route('admin.b2b.operations.provider-calls') }}">Nhật ký gọi NCC</a>
+                <a class="{{ request()->routeIs('admin.b2b.operations.credit-holds') ? 'is-active' : '' }}" href="{{ route('admin.b2b.operations.credit-holds') }}">Khoản giữ hạn mức</a>
               @endif
               @if ($canAccessB2bWebhooks)
                 <a class="{{ request()->routeIs('admin.b2b.webhooks.*') ? 'is-active' : '' }}" href="{{ route('admin.b2b.webhooks.index') }}">Lịch sử Webhook</a>
