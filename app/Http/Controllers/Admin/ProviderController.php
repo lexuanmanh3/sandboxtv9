@@ -113,7 +113,7 @@ class ProviderController extends Controller
                     'tong_so_gd_quet' => (int) ($validated['tong_so_gd_quet'] ?? 0),
                     'so_gd_loi_toi_da' => (int) ($validated['so_gd_loi_toi_da'] ?? 0),
                     'so_lan_kiem_tra_lai' => (int) ($validated['so_lan_kiem_tra_lai'] ?? 6),
-                    'hanh_dong_khi_het_gio' => $validated['hanh_dong_khi_het_gio'] ?? 'TU_DONG_HOAN_TIEN',
+                    'hanh_dong_khi_het_gio' => $validated['hanh_dong_khi_het_gio'] ?? 'MANUAL_REVIEW',
                 ],
                 'cau_hinh_canh_bao_loi' => [
                     'bat_canh_bao' => (bool) ($validated['bat_canh_bao'] ?? false),
@@ -181,7 +181,7 @@ class ProviderController extends Controller
                     'tong_so_gd_quet' => (int) ($validated['tong_so_gd_quet'] ?? 0),
                     'so_gd_loi_toi_da' => (int) ($validated['so_gd_loi_toi_da'] ?? 0),
                     'so_lan_kiem_tra_lai' => (int) ($validated['so_lan_kiem_tra_lai'] ?? 6),
-                    'hanh_dong_khi_het_gio' => $validated['hanh_dong_khi_het_gio'] ?? 'TU_DONG_HOAN_TIEN',
+                    'hanh_dong_khi_het_gio' => $validated['hanh_dong_khi_het_gio'] ?? 'MANUAL_REVIEW',
                 ],
                 'cau_hinh_canh_bao_loi' => [
                     'bat_canh_bao' => (bool) ($validated['bat_canh_bao'] ?? false),

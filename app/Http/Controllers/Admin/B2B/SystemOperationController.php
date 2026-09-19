@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin\B2B;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\CheckMobileTopupStatusJob;
 use App\Models\KhoanGiuHanMuc;
 use App\Models\LanGoiNhaCungCap;
+use App\Services\DaiLyApi\B2bCreditService;
 use Illuminate\Http\Request;
 
 class SystemOperationController extends Controller
@@ -32,6 +34,26 @@ class SystemOperationController extends Controller
         return view('admin.b2b.operations.provider-calls', compact('logs'));
     }
 
+    /**
+     * Tra cứu lại trạng thái thủ công từ Admin cho lần gọi NCC.
+     */
+    public function recheckProviderCall(Request $request, $id)
+    {
+        $call = LanGoiNhaCungCap::with('donHang')->findOrFail($id);
+
+        if ($call->ket_qua_xac_dinh === 'SUCCESS') {
+            return back()->with('info', 'Lần gọi này đã xác nhận thành công trước đó.');
+        }
+
+        if ($call->donHang && $call->donHang->trang_thai_don_hang === 'SUCCESS') {
+            return back()->with('info', 'Đơn hàng đã hoàn tất thành công.');
+        }
+
+        CheckMobileTopupStatusJob::dispatch($call->id);
+
+        return back()->with('success', "Đã gửi yêu cầu tra cứu lại trạng thái cho lần gọi #{$call->id} tới Nhà cung cấp.");
+    }
+
     public function creditHolds(Request $request)
     {
         $query = KhoanGiuHanMuc::with(['daiLyApi', 'donHang']);
@@ -51,19 +73,31 @@ class SystemOperationController extends Controller
 
     public function releaseCreditHold(Request $request, $id)
     {
-        $hold = KhoanGiuHanMuc::findOrFail($id);
+        $hold = KhoanGiuHanMuc::with('donHang')->findOrFail($id);
         
-        if ($hold->trang_thai !== 'DANG_GIU') {
-            return back()->with('error', 'Khoản giữ này đã được xử lý (Giải phóng hoặc Chốt).');
+        // Trạng thái hợp lệ của khoản giữ là HOLDING
+        if ($hold->trang_thai !== 'HOLDING') {
+            return back()->with('error', 'Khoản giữ này đã được xử lý (đã Chốt hoặc đã Giải phóng).');
         }
 
-        // TODO: Gọi Service giải phóng hạn mức (B2bCreditService)
-        $hold->update([
-            'trang_thai' => 'DA_GIAI_PHONG',
-            'giai_phong_luc' => now(),
-            'ly_do_giai_phong' => 'Nhả hạn mức thủ công bởi Admin'
-        ]);
+        // NGUYÊN TẮC: Không nhả hạn mức khi đơn hàng đang chờ phản hồi từ NCC
+        if ($hold->donHang && in_array(strtoupper((string) $hold->donHang->trang_thai_don_hang), ['PROVIDER_PENDING', 'PROCESSING'], true)) {
+            return back()->with('error', 'Không thể nhả hạn mức khi đơn hàng đang chờ phản hồi từ Nhà cung cấp. Cần tra cứu kết quả cuối hoặc xử lý đối soát trước!');
+        }
 
-        return back()->with('success', 'Đã giải phóng khoản giữ hạn mức thành công.');
+        if ($hold->donHang) {
+            app(B2bCreditService::class)->giaiPhongKhoanGiu(
+                $hold->donHang,
+                'Nhả hạn mức thủ công bởi Admin #' . (auth()->id() ?? 'system')
+            );
+        } else {
+            $hold->update([
+                'trang_thai' => 'RELEASED',
+                'giai_phong_luc' => now(),
+                'ly_do_giai_phong' => 'Nhả hạn mức thủ công bởi Admin #' . (auth()->id() ?? 'system'),
+            ]);
+        }
+
+        return back()->with('success', 'Đã giải phóng khoản giữ hạn mức an toàn.');
     }
 }

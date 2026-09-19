@@ -62,7 +62,7 @@ class StoreProviderRequest extends FormRequest
             'bo_qua_ma_loi_ncc' => ['nullable', 'string', 'max:255'],
             'bo_qua_message_ncc' => ['nullable', 'string', 'max:255'],
             'so_lan_kiem_tra_lai' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'hanh_dong_khi_het_gio' => ['nullable', 'string', Rule::in(['TU_DONG_HOAN_TIEN', 'MANUAL_REVIEW'])],
+            'hanh_dong_khi_het_gio' => ['nullable', 'string', Rule::in(['MANUAL_REVIEW'])],
         ];
     }
 

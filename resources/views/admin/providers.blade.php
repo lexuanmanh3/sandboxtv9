@@ -140,7 +140,7 @@
                   'tong_so_gd_quet' => $circuit['tong_so_gd_quet'] ?? 0,
                   'so_gd_loi_toi_da' => $circuit['so_gd_loi_toi_da'] ?? 0,
                   'so_lan_kiem_tra_lai' => $circuit['so_lan_kiem_tra_lai'] ?? 6,
-                  'hanh_dong_khi_het_gio' => $circuit['hanh_dong_khi_het_gio'] ?? 'TU_DONG_HOAN_TIEN',
+                  'hanh_dong_khi_het_gio' => 'MANUAL_REVIEW',
                   'bat_canh_bao' => (bool) ($alert['bat_canh_bao'] ?? false),
                   'canh_bao_xu_ly_cham_giay' => $alert['canh_bao_xu_ly_cham_giay'] ?? 0,
                   'kenh_canh_bao' => $alert['kenh_canh_bao'] ?? 'Telegram',
@@ -374,10 +374,9 @@
                <label>
                  <span>Hành động khi hết thời gian chờ SLA</span>
                  <select name="hanh_dong_khi_het_gio">
-                   <option value="TU_DONG_HOAN_TIEN">Tự động Hủy &amp; Hoàn 100% tiền ví cho khách (Khuyên dùng)</option>
-                   <option value="MANUAL_REVIEW">Chuyển sang Chờ duyệt thủ công (MANUAL_REVIEW)</option>
+                   <option value="MANUAL_REVIEW" selected>Chuyển sang Chờ duyệt đối soát thủ công (MANUAL_REVIEW - An toàn công nợ)</option>
                  </select>
-                 <small style="color: #64748b; font-size: 11px; margin-top: 2px;">Tự động hoàn tiền giúp khách hàng không phải chờ đợi lâu khi NCC bị treo.</small>
+                 <small style="color: #64748b; font-size: 11px; margin-top: 2px;">Bảo toàn tiền và hạn mức B2B khi NCC chưa xác nhận kết quả cuối cùng.</small>
                </label>
 
                <label>
@@ -899,7 +898,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setField("tong_so_gd_quet", data.tong_so_gd_quet);
       setField("so_gd_loi_toi_da", data.so_gd_loi_toi_da);
       setField("so_lan_kiem_tra_lai", data.so_lan_kiem_tra_lai ?? 6);
-      setField("hanh_dong_khi_het_gio", data.hanh_dong_khi_het_gio ?? "TU_DONG_HOAN_TIEN");
+      setField("hanh_dong_khi_het_gio", "MANUAL_REVIEW");
 
       setField("bat_canh_bao", data.bat_canh_bao);
       setField("canh_bao_xu_ly_cham_giay", data.canh_bao_xu_ly_cham_giay);

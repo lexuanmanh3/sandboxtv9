@@ -10,8 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class VerifyPartnerHmacSignature
 {
-    public const TIMESTAMP_WINDOW_SECONDS = 300; // 5 phút
-    public const NONCE_TTL_SECONDS = 600; // 10 phút
+    public const TIMESTAMP_WINDOW_SECONDS = 300; // 5 phút lệch tối đa
+    public const NONCE_TTL_SECONDS = 600;        // 10 phút chống phát lại
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -20,6 +20,7 @@ class VerifyPartnerHmacSignature
         $nonce = $request->header('X-Nonce');
         $signature = $request->header('X-Signature');
 
+        // 1. Bắt buộc các header xác thực cốt lõi
         if (!$clientId || !$timestamp || !$nonce || !$signature) {
             return response()->json([
                 'success' => false,
@@ -28,18 +29,18 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 1. Kiểm tra timestamp trong cửa sổ cho phép (+- 300s)
+        // 2. Kiểm tra Timestamp trong cửa sổ cho phép (+- 300s)
         $now = time();
         if (!is_numeric($timestamp) || abs($now - (int) $timestamp) > self::TIMESTAMP_WINDOW_SECONDS) {
             return response()->json([
                 'success' => false,
-                'error_code' => 'TIMESTAMP_EXPIRED_OR_INVALID',
+                'error_code' => 'REQUEST_EXPIRED',
                 'message' => 'Timestamp không hợp lệ hoặc đã lệch quá 5 phút so với máy chủ.',
                 'server_time' => $now,
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 2. Tra cứu cấu hình đối tác theo Client ID
+        // 3. Tra cứu cấu hình đại lý theo Client ID
         $cauHinh = CauHinhApiDaiLy::with('daiLyApi')
             ->where('client_id', $clientId)
             ->first();
@@ -54,7 +55,7 @@ class VerifyPartnerHmacSignature
 
         $daiLy = $cauHinh->daiLyApi;
 
-        // 3. Kiểm tra trạng thái hoạt động của đối tác & Key
+        // 4. Kiểm tra trạng thái hoạt động & Key thu hồi
         if ($daiLy->trang_thai !== 'hoat_dong') {
             return response()->json([
                 'success' => false,
@@ -63,6 +64,7 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_FORBIDDEN);
         }
 
+        // Khóa bị thu hồi phải vô hiệu ngay lập tức (không có ngoại lệ)
         if ($cauHinh->key_status === 'revoked') {
             return response()->json([
                 'success' => false,
@@ -71,21 +73,33 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 4. Kiểm tra Nonce nguyên tử chống tấn công Replay
+        // 5. Kiểm tra Nonce nguyên tử chống tấn công phát lại (Replay Attack)
         $nonceCacheKey = "b2b_nonce:{$daiLy->id}:{$nonce}";
         if (!Cache::add($nonceCacheKey, 1, self::NONCE_TTL_SECONDS)) {
             return response()->json([
                 'success' => false,
-                'error_code' => 'DUPLICATE_NONCE',
+                'error_code' => 'REPLAY_DETECTED',
                 'message' => 'Nonce đã được sử dụng trước đó (Replay attack detected).',
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 5. Chuẩn hóa chuỗi ký Canonical String
-        // METHOD\nPATH_WITH_QUERY\nTIMESTAMP\nNONCE\nBODY_SHA256
+        // 6. Xử lý Idempotency-Key
         $method = strtoupper($request->method());
-        
-        // Chuẩn hóa path và query
+        $idempotencyKey = $request->header('Idempotency-Key')
+            ?: $request->header('X-Idempotency-Key')
+            ?: '';
+
+        // Với các method thay đổi trạng thái (POST, PUT, DELETE), bắt buộc phải có Idempotency-Key
+        if (in_array($method, ['POST', 'PUT', 'DELETE'], true) && empty($idempotencyKey)) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'MISSING_IDEMPOTENCY_KEY',
+                'message' => 'Header Idempotency-Key là bắt buộc để đảm bảo an toàn giao dịch.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // 7. Chuẩn hóa chuỗi ký Canonical String duy nhất:
+        // METHOD\nCANONICAL_PATH_WITH_QUERY\nTIMESTAMP\nNONCE\nIDEMPOTENCY_KEY\nBODY_SHA256
         $path = '/' . ltrim($request->path(), '/');
         $queryString = $request->getQueryString();
         $canonicalUri = $queryString ? "{$path}?{$queryString}" : $path;
@@ -93,9 +107,9 @@ class VerifyPartnerHmacSignature
         $rawBody = in_array($method, ['GET', 'HEAD']) ? '' : (string) $request->getContent();
         $bodyHash = hash('sha256', $rawBody);
 
-        $stringToSign = "{$method}\n{$canonicalUri}\n{$timestamp}\n{$nonce}\n{$bodyHash}";
+        $stringToSign = "{$method}\n{$canonicalUri}\n{$timestamp}\n{$nonce}\n{$idempotencyKey}\n{$bodyHash}";
 
-        // 6. Tính toán và so sánh chữ ký bằng constant-time hash_equals
+        // 8. Tính toán và so sánh chữ ký bằng constant-time hash_equals
         $currentSecret = $cauHinh->secret_key_ma_hoa;
         $expectedSignature = hash_hmac('sha256', $stringToSign, $currentSecret);
 
@@ -103,7 +117,6 @@ class VerifyPartnerHmacSignature
 
         // Hỗ trợ Grace Period khi xoay key (Key Rotation)
         if (!$isSignatureValid && $cauHinh->key_status === 'rotating' && $cauHinh->previous_secret_ma_hoa) {
-            // Kiểm tra xem thời gian xoay có trong vòng 48h không
             if ($cauHinh->key_rotated_at && $cauHinh->key_rotated_at->diffInHours(now()) <= 48) {
                 $previousExpectedSignature = hash_hmac('sha256', $stringToSign, $cauHinh->previous_secret_ma_hoa);
                 if (hash_equals($previousExpectedSignature, strtolower($signature))) {
@@ -120,9 +133,10 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 7. Gắn thông tin đại lý vào Request attributes để controller sử dụng
+        // 9. Gắn thông tin đại lý và Idempotency-Key vào Request attributes
         $request->attributes->set('b2b_partner', $daiLy);
         $request->attributes->set('b2b_config', $cauHinh);
+        $request->attributes->set('b2b_idempotency_key', $idempotencyKey);
 
         return $next($request);
     }

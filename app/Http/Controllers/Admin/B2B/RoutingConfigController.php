@@ -46,26 +46,33 @@ class RoutingConfigController extends Controller
 
     public function create()
     {
-        return redirect()->route('admin.b2b.routing-configs.index');
+        return redirect()->route('admin.b2b.routing-configs.index', ['action' => 'create']);
     }
 
     public function store(\App\Http\Requests\Admin\B2B\StoreRoutingConfigRequest $request)
     {
         $validated = $request->validated();
-        $isDangMo = $request->has('dang_mo') ? (bool)$request->dang_mo : (($request->input('trang_thai') ?? 'ACTIVE') === 'ACTIVE');
+        $isDangMo = $request->has('dang_mo') ? $request->boolean('dang_mo') : (($request->input('trang_thai') ?? 'ACTIVE') === 'ACTIVE');
         $tenCauHinh = $request->input('ten_cau_hinh') ?: ($request->input('mo_ta') ?: 'Tuyến cấu hình tự động');
+
+        $sanPhamIds = array_values(array_filter(array_map('intval', (array) ($request->input('san_pham_ids') ?? []))));
+        $singleSanPhamId = count($sanPhamIds) === 1 ? $sanPhamIds[0] : ($validated['san_pham_id'] ?? null);
+        $danhSachSanPhamId = !empty($sanPhamIds) ? $sanPhamIds : ($singleSanPhamId ? [$singleSanPhamId] : null);
+        $moTa = $request->input('mo_ta') ?? null;
 
         CauHinhDichVu::create([
             'dai_ly_ap_dung_id' => $validated['dai_ly_api_id'] ?? null,
             'dich_vu_id' => $validated['dich_vu_id'],
             'loai_san_pham_id' => $validated['loai_san_pham_id'] ?? null,
-            'san_pham_id' => $validated['san_pham_id'] ?? null,
+            'san_pham_id' => $singleSanPhamId,
+            'danh_sach_san_pham_id' => $danhSachSanPhamId,
             'nha_cung_cap_id' => $validated['nha_cung_cap_id'],
             'muc_uu_tien' => $validated['muc_uu_tien'] ?? 1,
             'dang_mo' => $isDangMo,
             'ket_thuc_cau_hinh' => $request->boolean('ket_thuc_cau_hinh'),
             'che_do_chay' => $validated['che_do_chay'] ?? 'api',
             'ten_cau_hinh' => $tenCauHinh,
+            'mo_ta' => $moTa,
             'timeout_he_thong_giay' => $request->input('timeout_he_thong_giay', 30),
             'timeout_gui_ncc_giay' => $request->input('timeout_gui_ncc_giay', 25),
             'thoi_gian_tra_ket_qua_giay' => $request->input('thoi_gian_tra_ket_qua_giay', 60),
@@ -76,26 +83,33 @@ class RoutingConfigController extends Controller
 
     public function edit(CauHinhDichVu $routing_config)
     {
-        return redirect()->route('admin.b2b.routing-configs.index');
+        return redirect()->route('admin.b2b.routing-configs.index', ['edit' => $routing_config->id]);
     }
 
     public function update(\App\Http\Requests\Admin\B2B\StoreRoutingConfigRequest $request, CauHinhDichVu $routing_config)
     {
         $validated = $request->validated();
-        $isDangMo = $request->has('dang_mo') ? (bool)$request->dang_mo : (($request->input('trang_thai') ?? 'ACTIVE') === 'ACTIVE');
+        $isDangMo = $request->has('dang_mo') ? $request->boolean('dang_mo') : (($request->input('trang_thai') ?? 'ACTIVE') === 'ACTIVE');
         $tenCauHinh = $request->input('ten_cau_hinh') ?: ($request->input('mo_ta') ?: $routing_config->ten_cau_hinh);
+
+        $sanPhamIds = array_values(array_filter(array_map('intval', (array) ($request->input('san_pham_ids') ?? []))));
+        $singleSanPhamId = count($sanPhamIds) === 1 ? $sanPhamIds[0] : ($validated['san_pham_id'] ?? null);
+        $danhSachSanPhamId = !empty($sanPhamIds) ? $sanPhamIds : ($singleSanPhamId ? [$singleSanPhamId] : null);
+        $moTa = $request->input('mo_ta') ?? null;
 
         $routing_config->update([
             'dai_ly_ap_dung_id' => $validated['dai_ly_api_id'] ?? null,
             'dich_vu_id' => $validated['dich_vu_id'],
             'loai_san_pham_id' => $validated['loai_san_pham_id'] ?? null,
-            'san_pham_id' => $validated['san_pham_id'] ?? null,
+            'san_pham_id' => $singleSanPhamId,
+            'danh_sach_san_pham_id' => $danhSachSanPhamId,
             'nha_cung_cap_id' => $validated['nha_cung_cap_id'],
             'muc_uu_tien' => $validated['muc_uu_tien'] ?? 1,
             'dang_mo' => $isDangMo,
             'ket_thuc_cau_hinh' => $request->boolean('ket_thuc_cau_hinh'),
             'che_do_chay' => $validated['che_do_chay'] ?? 'api',
             'ten_cau_hinh' => $tenCauHinh,
+            'mo_ta' => $moTa,
             'timeout_he_thong_giay' => $request->input('timeout_he_thong_giay', 30),
             'timeout_gui_ncc_giay' => $request->input('timeout_gui_ncc_giay', 25),
             'thoi_gian_tra_ket_qua_giay' => $request->input('thoi_gian_tra_ket_qua_giay', 60),
@@ -106,7 +120,11 @@ class RoutingConfigController extends Controller
 
     public function destroy(CauHinhDichVu $routing_config)
     {
-        $routing_config->delete();
-        return redirect()->route('admin.b2b.routing-configs.index')->with('success', 'Xóa tuyến dịch vụ thành công.');
+        try {
+            $routing_config->delete();
+            return redirect()->route('admin.b2b.routing-configs.index')->with('success', 'Xóa tuyến dịch vụ thành công.');
+        } catch (\Throwable $e) {
+            return redirect()->route('admin.b2b.routing-configs.index')->with('error', 'Không thể xóa tuyến dịch vụ: ' . $e->getMessage());
+        }
     }
 }

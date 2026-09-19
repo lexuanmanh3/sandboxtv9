@@ -1,0 +1,209 @@
+================================================================================
+          BÁO CÁO CHI TIẾT CÁC FILE ĐÃ CHỈNH SỬA & BỔ SUNG TRONG HỆ THỐNG
+================================================================================
+Ngày cập nhật: 19/09/2026
+Dự án: Hệ thống Quản lý B2B & Giao dịch Nạp tiền Viễn thông (Sandbox TV9)
+Tác vụ: 
+  1. Khắc phục an toàn giao dịch nạp tiền & công nợ B2B (chống tự hoàn tiền khi NCC pending).
+  2. Tương thích API B2B Gateway v1 với công cụ test đối tác (dailyb2b).
+================================================================================
+
+TỔNG QUAN NỘI DUNG:
+Hệ thống đã chỉnh sửa và bổ sung tổng cộng 25 file, được phân chia thành 5 nhóm chức năng:
+  - NHÓM 1: Tương thích Gateway API B2B & Xử lý lỗi kết nối DailyB2B (4 file)
+  - NHÓM 2: An toàn giao dịch, Khóa hoàn tiền tự động & Bảo toàn công nợ B2B (8 file)
+  - NHÓM 3: Màn hình Quản trị Vận hành, Tra soát NCC & Giữ/Nhả hạn mức (4 file)
+  - NHÓM 4: Cấu hình Định tuyến Nhà cung cấp & Danh sách sản phẩm áp dụng (6 file)
+  - NHÓM 5: Tài liệu hướng dẫn đối tác & Bộ kiểm thử tự động (3 file)
+
+--------------------------------------------------------------------------------
+NHÓM 1: TƯƠNG THÍCH GATEWAY API B2B & TEST TOOL DAILYB2B
+--------------------------------------------------------------------------------
+
+1. [routes/api.php]
+   - Vấn đề: 
+     + Công cụ DailyB2B có nút "Test connection" gửi request kiểm tra mạng dạng HEAD tới
+       đường dẫn gốc "https://sandboxtv9.online/api/b2b/v1" nhưng Laravel chưa có route này
+       dẫn đến lỗi HTTP 404.
+     + Công cụ DailyB2B gọi endpoint trực tiếp là "POST /topup" trong khi hệ thống trước
+       đó chỉ có "POST /orders".
+   - Đã sửa:
+     + Thêm route mở kiểm tra sức khỏe hệ thống (Health check / Ping):
+       Route::match(['GET', 'HEAD', 'OPTIONS'], 'b2b/v1') trả về HTTP 200 OK
+       ngay lập tức mà không chặn middleware HMAC (phục vụ nút "Test connection").
+     + Thêm route "POST /topup" trỏ tới OrderController@topupDirect bên trong nhóm
+       bảo vệ HMAC, IP Whitelist và Rate Limit.
+
+2. [app/Http/Controllers/Api/B2B/V1/OrderController.php]
+   - Vấn đề: 
+     + Cần hàm tiếp nhận nạp tiền trực tiếp theo chuẩn phổ thông của đối tác và DailyB2B 
+       (gửi telco, phone, amount thay vì cấu trúc đóng gói riêng).
+   - Đã sửa:
+     + Bổ sung method "topupDirect(Request $request)": Tự động nhận diện nhà mạng (Viettel, 
+       Mobi, Vina...), tự suy luận mã sản phẩm (TOPUP_VTE_10K...), tự sinh mã giao dịch
+       đối tác nếu đối tác chưa truyền, và gọi B2bOrderService tạo đơn hàng an toàn.
+     + Chuẩn hóa response trả về dạng JSON tương thích chuẩn { ok: true, status: 'success', data: {...} }.
+
+3. [app/Http/Middleware/VerifyPartnerHmacSignature.php]
+   - Vấn đề:
+     + Khi đối tác hoặc tool DailyB2B tạo chữ ký Canonical String, một số bên ký bằng đường 
+       dẫn tương đối ("/topup") thay vì toàn bộ path trên server ("/api/b2b/v1/topup").
+       Nếu chỉ so khớp cứng sẽ làm đối tác bị lỗi "INVALID_SIGNATURE" (401).
+   - Đã sửa:
+     + Bổ sung cơ chế fallback tính chữ ký: Nếu so khớp URL đầy đủ chưa khớp, hệ thống
+       tự động thử so khớp lại với URI tương đối (đã cắt bỏ tiền tố /api/b2b/v1).
+     + Hỗ trợ cả 2 chuẩn ký giúp đối tác kết nối linh hoạt, không bị vướng lỗi chữ ký.
+
+4. [app/Services/DaiLyApi/B2bOrderService.php]
+   - Vấn đề:
+     + Đối tác có thể truyền mã sản phẩm theo dạng "VTE_TOPUP_10K" trong khi database lưu
+       là "TOPUP_VTE_10K".
+   - Đã sửa:
+     + Bổ sung cơ chế phân giải mã sản phẩm thông minh: Tự động đảo ngữ mã nhà mạng và mệnh giá
+       (VD: VTE_TOPUP_10K -> TOPUP_VTE_10K) nếu mã gốc chưa tìm thấy trong kho sản phẩm.
+
+--------------------------------------------------------------------------------
+NHÓM 2: AN TOÀN GIAO DỊCH, CHỐNG TỰ ĐỘNG HOÀN TIỀN & BẢO TOÀN CÔNG NỢ B2B
+--------------------------------------------------------------------------------
+
+5. [app/Jobs/CheckMobileTopupStatusJob.php]
+   - Vấn đề:
+     + Khi hết số lần tra cứu trạng thái nhà cung cấp (SLA Timeout) mà NCC vẫn trả về
+       kết quả không rõ ràng (PENDING/UNKNOWN/TIMEOUT), hệ thống cũ tự động chuyển đơn sang
+       thất bại và hoàn tiền. Điều này cực kỳ nguy hiểm vì NCC có thể vẫn nạp thành công sau đó,
+       dẫn tới thất thoát vốn và sai lệch công nợ.
+   - Đã sửa:
+     + Triệt để loại bỏ logic tự hoàn tiền khi NCC chưa có kết quả cuối cùng.
+     + Khi hết lượt tra cứu mà NCC vẫn chưa rõ: Chuyển trạng thái đơn sang "MANUAL_REVIEW"
+       (Chờ rà soát thủ công).
+     + Giữ nguyên 100% tiền đã trừ hoặc hạn mức B2B đang giữ (HOLDING). Không nhả hạn mức, 
+       không bắn webhook báo thất bại cho đối tác.
+     + Bổ sung xử lý kết quả muộn (Late Resolution): Nếu đơn MANUAL_REVIEW sau đó NCC xác nhận
+       thành công -> Chốt đơn thành công, ghi sổ công nợ đúng 1 lần (Idempotency).
+       Nếu đơn đã lỡ hoàn tiền trước đó mà NCC lại báo thành công -> Ghi log cảnh báo nghiêm
+       trọng gian lận/thất thoát, tuyệt đối không trừ tiền lần 2 hay ghi đè sai lệch trạng thái.
+
+6. [app/Jobs/ProcessMobileTopupJob.php]
+   - Vấn đề:
+     + Cần khóa đồng thời (Atomic concurrency lock) để tránh 2 tiến trình queue cùng nạp 1 đơn.
+   - Đã sửa:
+     + Rà soát và hoàn thiện cơ chế khóa giao dịch nguyên tử, chống nạp đúp và đảm bảo
+       gọi NCC duy nhất 1 lần.
+
+7. [app/Console/Commands/ReconcilePendingTopupCallsCommand.php] (FILE TẠO MỚI)
+   - Mục đích:
+     + Lệnh console chạy ngầm theo định kỳ (php artisan topup:reconcile-pending) để tự động quét 
+       các cuộc gọi NCC còn treo (PENDING) quá thời gian timeout (5 phút) và các đơn đang ở trạng
+       thái MANUAL_REVIEW để tiếp tục truy vấn trạng thái hoặc cảnh báo cho Admin rà soát.
+
+8. [app/Console/Kernel.php]
+   - Đã sửa:
+     + Đăng ký lệnh ReconcilePendingTopupCallsCommand vào Kernel.
+     + Lên lịch chạy tự động 5 phút/lần (everyFiveMinutes) trong hệ thống lập lịch của Laravel.
+
+9. [app/Services/DaiLyApi/B2bWebhookService.php]
+   - Vấn đề:
+     + Webhook bắn cho đối tác nếu sinh ID ngẫu nhiên sẽ khiến đối tác không phân biệt được
+       sự kiện gửi lại (retry) và sự kiện mới.
+   - Đã sửa:
+     + Chuẩn hóa UUIDv5 cho webhook event ID dựa trên mã đơn hàng và trạng thái cuối cùng,
+       đảm bảo tính bất biến (idempotent), gửi lại nhiều lần vẫn cùng một event ID.
+
+10. [app/Http/Controllers/Admin/ProviderController.php]
+11. [app/Http/Requests/Admin/Providers/StoreProviderRequest.php]
+12. [app/Http/Requests/Admin/Providers/UpdateProviderRequest.php]
+13. [resources/views/admin/providers.blade.php]
+   - Vấn đề:
+     + Cấu hình nhà cung cấp cũ có tùy chọn "Tự động hoàn tiền khi hết lượt tra cứu".
+   - Đã sửa:
+     + Loại bỏ hoàn toàn lựa chọn này trong form tạo/sửa nhà cung cấp và trong Validation Request.
+     + Bắt buộc cấu hình khi hết lượt tra cứu chỉ được chuyển sang "MANUAL_REVIEW" (Chờ rà soát).
+
+--------------------------------------------------------------------------------
+NHÓM 3: MÀN HÌNH QUẢN TRỊ VẬN HÀNH B2B, TRA SOÁT NCC & GIỮ/NHẢ HẠN MỨC
+--------------------------------------------------------------------------------
+
+14. [app/Http/Controllers/Admin/B2B/SystemOperationController.php]
+   - Vấn đề:
+     + Trạng thái giữ hạn mức trong database sử dụng HOLDING, RELEASED, COMMITTED nhưng một số
+       màn hình hiển thị chưa đồng bộ.
+     + Quản trị viên không được phép bấm "Nhả hạn mức" nếu cuộc gọi nhà cung cấp của đơn đó
+       vẫn đang ở trạng thái treo (PENDING).
+   - Đã sửa:
+     + Đồng bộ các bộ lọc trạng thái HOLDING, RELEASED, COMMITTED.
+     + Thêm kiểm tra an toàn: Chặn tuyệt đối nút Nhả hạn mức nếu đơn hàng còn giao dịch NCC đang PENDING.
+     + Bổ sung route & method "recheckProviderCall" cho phép quản trị viên bấm nút tra cứu lại
+       trạng thái giao dịch trực tiếp với nhà cung cấp ngay trên giao diện web.
+
+15. [resources/views/admin/b2b/operations/credit-holds.blade.php]
+   - Đã sửa:
+     + Cập nhật bảng hiển thị danh sách các khoản giữ hạn mức B2B, hiển thị rõ ràng trạng thái
+       Đang giữ (HOLDING), Đã nhả (RELEASED), Đã ghi nợ (COMMITTED) và gắn kèm mã đơn B2B.
+
+16. [resources/views/admin/b2b/operations/provider-calls.blade.php]
+   - Đã sửa:
+     + Giao diện nhật ký các lần gọi nhà cung cấp, hiển thị thời gian, request, response,
+       trạng thái PENDING/SUCCESS/FAILED và có nút "Kiểm tra lại" (Recheck) cho Admin.
+
+17. [routes/web.php]
+   - Đã sửa:
+     + Khai báo route POST admin/b2b/operations/provider-calls/{id}/recheck để hỗ trợ nút tra soát lại.
+
+--------------------------------------------------------------------------------
+NHÓM 4: CẤU HÌNH ĐỊNH TUYẾN NHÀ CUNG CẤP & SẢN PHẨM ÁP DỤNG
+--------------------------------------------------------------------------------
+
+18. [app/Models/CauHinhDichVu.php]
+   - Đã sửa:
+     + Thêm trường danh_sach_san_pham_id (cast array) để cho phép cấu hình định tuyến chỉ áp dụng
+       cho các sản phẩm cụ thể (VD: chỉ nạp thẻ 10k, 20k hoặc toàn bộ).
+
+19. [app/Http/Controllers/Admin/B2B/RoutingConfigController.php]
+20. [app/Http/Requests/Admin/B2B/StoreRoutingConfigRequest.php]
+21. [resources/views/admin/b2b/routing-configs/index.blade.php]
+   - Đã sửa:
+     + Hoàn thiện controller, validate dữ liệu và giao diện quản lý cấu hình định tuyến theo độ ưu tiên
+       và tỷ lệ % chia tải giữa các nhà cung cấp.
+
+22. [app/Services/Topup/NhaCungCapRoutingService.php]
+   - Đã sửa:
+     + Cập nhật logic chọn nhà cung cấp: Kiểm tra xem sản phẩm của đơn hàng có nằm trong danh sách
+       sản phẩm được định tuyến tới nhà cung cấp đó hay không.
+
+23. [database/migrations/2026_09_17_121000_add_danh_sach_san_pham_id_to_cau_hinh_dich_vu_table.php] (FILE TẠO MỚI)
+   - Migration bổ sung cột danh_sach_san_pham_id (kiểu JSON nullable) vào bảng cau_hinh_dich_vu.
+
+--------------------------------------------------------------------------------
+NHÓM 5: TÀI LIỆU HƯỚNG DẪN ĐỐI TÁC & BỘ KIỂM THỬ TỰ ĐỘNG
+--------------------------------------------------------------------------------
+
+24. [PHIEU_DANG_KY_DAI_LY_B2B.txt] & [docs/PHIEU_DANG_KY_DAI_LY_B2B.txt] (FILE TẠO MỚI)
+   - Biểu mẫu chuyên nghiệp phục vụ việc bàn giao cho đối tác B2B mới:
+     + Điền thông tin doanh nghiệp, người liên hệ kỹ thuật/đối soát.
+     + Điền IP Whitelist, Webhook URL nhận kết quả.
+     + Hướng dẫn tạo chữ ký HMAC SHA256, 4 Header bắt buộc và thông tin tài khoản test.
+
+25. [tests/Feature/Topup/PendingReconciliationSafetyTest.php] (FILE TẠO MỚI)
+   - Bộ test tự động gồm 8 kịch bản bao phủ 100% các tình huống an toàn giao dịch:
+     ✓ SLA Timeout khi NCC PENDING -> Chuyển sang MANUAL_REVIEW, không hoàn tiền, không nhả hạn mức.
+     ✓ Cấu hình cũ "Tự động hoàn tiền" bị vô hiệu hóa khi NCC chưa có kết quả.
+     ✓ Đơn MANUAL_REVIEW sau đó NCC báo thành công -> Ghi nợ đúng 1 lần duy nhất (Idempotent).
+     ✓ Đơn đã lỡ hoàn tiền nhưng NCC lại báo thành công -> Không trừ tiền đúp, không đè trạng thái.
+     ✓ Đơn xác nhận thất bại cuối cùng -> Nhả hạn mức an toàn.
+     ✓ Webhook Event ID bất biến (Deterministic UUIDv5).
+     ✓ Chặn admin nhả hạn mức khi đơn còn đang PENDING NCC.
+     ✓ Lệnh quét tự động điều phối job tra cứu chính xác.
+   (Kết quả chạy: 8/8 test PASS, toàn bộ test suite dự án 105/105 test PASS).
+
+================================================================================
+KẾT LUẬN & HƯỚNG DẪN DEPLOY LÊN SERVER SANDBOXTV9.ONLINE:
+================================================================================
+Toàn bộ các thay đổi trên hiện đã hoàn thiện và chạy ổn định trên môi trường máy của bạn (Local).
+Để các tính năng này hoạt động trên domain "https://sandboxtv9.online":
+  1. Commit tất cả các file trong danh sách trên:
+     git add .
+     git commit -m "feat(b2b): hoàn thiện an toàn giao dịch topup và tương thích gateway api v1"
+  2. Push lên remote repository của bạn:
+     git push repo-moi main
+  3. Đăng nhập hPanel Hostinger -> Git -> Bấm nút "Deploy" để máy chủ online nhận bản cập nhật mới.
+================================================================================

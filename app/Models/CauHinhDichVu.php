@@ -20,10 +20,12 @@ class CauHinhDichVu extends Model
      */
     protected $fillable = [
         'ten_cau_hinh',
+        'mo_ta',
         'nha_cung_cap_id',
         'dich_vu_id',
         'loai_san_pham_id',
         'san_pham_id',
+        'danh_sach_san_pham_id',
         'dai_ly_ap_dung_id',
         'tai_khoan_ap_dung_id',
         'muc_uu_tien',
@@ -42,6 +44,7 @@ class CauHinhDichVu extends Model
     protected $casts = [
         'dang_mo' => 'boolean',
         'ket_thuc_cau_hinh' => 'boolean',
+        'danh_sach_san_pham_id' => 'array',
     ];
 
     /**

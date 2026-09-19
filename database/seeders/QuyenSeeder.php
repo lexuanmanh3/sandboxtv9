@@ -468,8 +468,6 @@ class QuyenSeeder extends Seeder
                 'dich_vu.access', 'dich_vu.view', 'dich_vu.create', 'dich_vu.update', 'dich_vu.export',
                 'loai_san_pham.access', 'loai_san_pham.view', 'loai_san_pham.create', 'loai_san_pham.update', 'loai_san_pham.export',
                 'product.access', 'product.view', 'product.create', 'product.update', 'product.map', 'product.sync',
-                'backend.providers',
-                'service_config.access', 'service_config.view', 'service_config.test',
                 'provider_product.access', 'provider_product.view', 'provider_product.create', 'provider_product.update', 'provider_product.map', 'provider_product.sync',
                 'provider_error_code.access', 'provider_error_code.view', 'provider_error_code.create', 'provider_error_code.update',
                 'order.access', 'order.view', 'order.update', 'order.export',

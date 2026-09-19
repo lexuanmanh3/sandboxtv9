@@ -9,6 +9,8 @@ use App\Services\DaiLyApi\B2bOrderService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class OrderController extends Controller
@@ -17,14 +19,18 @@ class OrderController extends Controller
         protected B2bOrderService $orderService
     ) {}
 
+    /**
+     * Tạo đơn nạp tiền B2B chuẩn hóa.
+     * Endpoint: POST /api/b2b/v1/orders
+     */
     public function create(Request $request): JsonResponse
     {
         /** @var DaiLyApi $partner */
         $partner = $request->attributes->get('b2b_partner');
 
-        $idempotencyKey = $request->header('Idempotency-Key')
-            ?: $request->header('X-Idempotency-Key')
-            ?: $request->input('idempotency_key');
+        $idempotencyKey = $request->attributes->get('b2b_idempotency_key')
+            ?: $request->header('Idempotency-Key')
+            ?: $request->header('X-Idempotency-Key');
 
         if (!$idempotencyKey) {
             return response()->json([
@@ -49,25 +55,47 @@ class OrderController extends Controller
 
             return response()->json($result['data'], $result['http_code'], $headers);
         } catch (DomainException $de) {
-            $code = $de->getCode() ?: Response::HTTP_UNPROCESSABLE_ENTITY;
+            $httpCode = $de->getCode() ?: Response::HTTP_UNPROCESSABLE_ENTITY;
+            $msg = $de->getMessage();
+
+            // Phân loại mã lỗi API công khai chính xác
+            $errorCode = match (true) {
+                $httpCode === 409 && str_contains($msg, 'Idempotency-Key') => 'IDEMPOTENCY_CONFLICT',
+                $httpCode === 409 && str_contains($msg, 'Mã đơn đối tác') => 'DUPLICATE_ORDER',
+                $httpCode === 404 => 'INVALID_PRODUCT',
+                $httpCode === 403 && str_contains($msg, 'loại trừ') => 'PRODUCT_EXCLUDED',
+                $httpCode === 403 => 'PRODUCT_UNAUTHORIZED',
+                $httpCode === 422 && str_contains($msg, 'hạn mức') => 'INSUFFICIENT_CREDIT',
+                $httpCode === 422 && str_contains($msg, 'định dạng') => 'INVALID_REQUEST',
+                default => 'ORDER_CREATION_FAILED',
+            };
+
             return response()->json([
                 'success' => false,
-                'error_code' => 'ORDER_CREATION_FAILED',
-                'message' => $de->getMessage(),
-            ], $code);
+                'error_code' => $errorCode,
+                'message' => $msg,
+            ], $httpCode);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("B2B Order Creation Exception: " . $e->getMessage(), [
+            $requestId = (string) Str::uuid();
+
+            Log::error("B2B Order Creation Exception [Req: {$requestId}]: " . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
+                'partner_id' => $partner->id,
             ]);
 
             return response()->json([
                 'success' => false,
-                'error_code' => 'SYSTEM_ERROR',
+                'error_code' => 'INTERNAL_ERROR',
                 'message' => 'Lỗi xử lý nội bộ hệ thống khi tiếp nhận đơn.',
+                'request_id' => $requestId,
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
+    /**
+     * Tra cứu chi tiết đơn hàng theo ID nội bộ (Scope cứng theo đại lý).
+     * Endpoint: GET /api/b2b/v1/orders/{id}
+     */
     public function show(Request $request, int $id): JsonResponse
     {
         /** @var DaiLyApi $partner */
@@ -91,6 +119,10 @@ class OrderController extends Controller
         ]);
     }
 
+    /**
+     * Tra cứu danh sách đơn hàng hoặc theo mã đơn đối tác (Scope cứng theo đại lý).
+     * Endpoint: GET /api/b2b/v1/orders
+     */
     public function query(Request $request): JsonResponse
     {
         /** @var DaiLyApi $partner */
@@ -116,8 +148,27 @@ class OrderController extends Controller
             ]);
         }
 
-        // Nếu không có partner_order_id, trả về danh sách phân trang
-        $orders = $query->orderByDesc('id')->paginate(20);
+        // Lọc theo khoảng thời gian nếu có
+        if ($request->filled('from_date')) {
+            $query->where('created_at', '>=', $request->query('from_date'));
+        }
+        if ($request->filled('to_date')) {
+            $query->where('created_at', '<=', $request->query('to_date'));
+        }
+        if ($request->filled('status')) {
+            $status = strtoupper((string) $request->query('status'));
+            $mappedStatus = match ($status) {
+                'PENDING' => 'QUEUED',
+                'PROCESSING' => 'DANG_XU_LY',
+                'SUCCESS' => 'HOAN_THANH',
+                'FAILED' => 'THAT_BAI',
+                default => $status,
+            };
+            $query->where('trang_thai_don_hang', $mappedStatus);
+        }
+
+        $perPage = min(100, max(1, (int) $request->query('per_page', 20)));
+        $orders = $query->orderByDesc('id')->paginate($perPage);
 
         $items = collect($orders->items())->map(fn($d) => $this->formatOrder($d));
 
@@ -130,8 +181,26 @@ class OrderController extends Controller
         ]);
     }
 
+    /**
+     * Chuẩn hóa cấu trúc đơn hàng trả về theo chuẩn public API.
+     */
     protected function formatOrder(DonHang $donHang): array
     {
+        // Ánh xạ trạng thái nội bộ sang trạng thái công khai chuẩn
+        $publicStatus = match ($donHang->trang_thai_don_hang) {
+            'QUEUED', 'CHO_XU_LY' => 'pending',
+            'DANG_XU_LY', 'PROCESSING' => 'processing',
+            'HOAN_THANH', 'SUCCESS' => 'success',
+            'THAT_BAI', 'FAILED' => 'failed',
+            'MANUAL_REVIEW' => 'manual_review',
+            default => strtolower($donHang->trang_thai_don_hang),
+        };
+
+        // completed_at chỉ điền khi đơn có kết quả cuối cùng (thành công hoặc thất bại)
+        $completedAt = in_array($publicStatus, ['success', 'failed'], true)
+            ? ($donHang->hoan_thanh_luc?->toIso8601String() ?: $donHang->that_bai_luc?->toIso8601String() ?: $donHang->updated_at?->toIso8601String())
+            : null;
+
         return [
             'order_id' => $donHang->id,
             'order_code' => $donHang->ma_don_hang,
@@ -141,11 +210,10 @@ class OrderController extends Controller
             'product_name' => $donHang->ten_san_pham_snapshot,
             'amount' => (float) $donHang->menh_gia,
             'price' => (float) $donHang->gia_ban,
-            'status' => $donHang->trang_thai_don_hang,
+            'status' => $publicStatus,
             'payment_status' => $donHang->trang_thai_thanh_toan,
             'created_at' => $donHang->created_at?->toIso8601String(),
-            'completed_at' => $donHang->hoan_thanh_luc?->toIso8601String(),
-            'failed_at' => $donHang->that_bai_luc?->toIso8601String(),
+            'completed_at' => $completedAt,
         ];
     }
 }

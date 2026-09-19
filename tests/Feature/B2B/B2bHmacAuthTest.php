@@ -40,7 +40,7 @@ class B2bHmacAuthTest extends TestCase
         ]);
     }
 
-    protected function signHeaders(string $method, string $uri, string $body = '', ?int $timestamp = null, ?string $nonce = null, ?string $overrideSecret = null, ?string $overrideClientId = null): array
+    protected function signHeaders(string $method, string $uri, string $body = '', ?int $timestamp = null, ?string $nonce = null, ?string $overrideSecret = null, ?string $overrideClientId = null, string $idempotencyKey = ''): array
     {
         $ts = $timestamp ?? time();
         $nc = $nonce ?? (string) Str::uuid();
@@ -51,16 +51,21 @@ class B2bHmacAuthTest extends TestCase
         $query = parse_url($uri, PHP_URL_QUERY);
         $canonicalUri = $query ? "{$path}?{$query}" : $path;
 
-        $bodyHash = hash('sha256', $body);
-        $stringToSign = strtoupper($method) . "\n{$canonicalUri}\n{$ts}\n{$nc}\n{$bodyHash}";
+        $bodyHash = hash('sha256', in_array(strtoupper($method), ['GET', 'HEAD']) ? '' : $body);
+        $stringToSign = strtoupper($method) . "\n{$canonicalUri}\n{$ts}\n{$nc}\n{$idempotencyKey}\n{$bodyHash}";
         $signature = hash_hmac('sha256', $stringToSign, $sec);
 
-        return [
+        $headers = [
             'X-Client-Id' => $cid,
             'X-Timestamp' => (string) $ts,
             'X-Nonce' => $nc,
             'X-Signature' => $signature,
         ];
+        if ($idempotencyKey !== '') {
+            $headers['Idempotency-Key'] = $idempotencyKey;
+        }
+
+        return $headers;
     }
 
     public function test_valid_hmac_signature_allows_access(): void
@@ -102,7 +107,7 @@ class B2bHmacAuthTest extends TestCase
         $response->assertStatus(401)
             ->assertJson([
                 'success' => false,
-                'error_code' => 'TIMESTAMP_EXPIRED_OR_INVALID',
+                'error_code' => 'REQUEST_EXPIRED',
             ]);
     }
 
@@ -135,7 +140,7 @@ class B2bHmacAuthTest extends TestCase
         $second->assertStatus(401)
             ->assertJson([
                 'success' => false,
-                'error_code' => 'DUPLICATE_NONCE',
+                'error_code' => 'REPLAY_DETECTED',
             ]);
     }
 

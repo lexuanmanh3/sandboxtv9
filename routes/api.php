@@ -16,7 +16,29 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 /*
 |--------------------------------------------------------------------------
-| B2B Partner API v1 Routes
+| B2B Partner API Ping / Health Check (Mở cho Test Connection của DailyB2B)
+|--------------------------------------------------------------------------
+*/
+Route::match(['GET', 'HEAD', 'OPTIONS'], 'b2b/v1', function () {
+    return response()->json([
+        'ok' => true,
+        'status' => 'OK',
+        'message' => 'B2B API Gateway is healthy',
+        'time' => now()->toIso8601String(),
+    ]);
+});
+
+Route::match(['GET', 'HEAD', 'OPTIONS'], 'b2b/v1/ping', function () {
+    return response()->json([
+        'ok' => true,
+        'status' => 'OK',
+        'message' => 'pong',
+    ]);
+});
+
+/*
+|--------------------------------------------------------------------------
+| B2B Partner API v1 Routes (Protected by HMAC, IP, Throttle)
 |--------------------------------------------------------------------------
 */
 Route::prefix('b2b/v1')

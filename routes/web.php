@@ -221,6 +221,7 @@ Route::middleware(['auth', 'active'])->prefix('admin/b2b')->name('admin.b2b.')->
 
     // Vận hành & Xử lý sự cố
     Route::get('/operations/provider-calls', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'providerCalls'])->name('operations.provider-calls')->middleware('quyen:b2b_operation.view');
+    Route::post('/operations/provider-calls/{id}/recheck', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'recheckProviderCall'])->name('operations.provider-calls.recheck')->middleware('quyen:b2b_operation.view');
     Route::get('/operations/credit-holds', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'creditHolds'])->name('operations.credit-holds')->middleware('quyen:b2b_operation.view');
     Route::post('/operations/credit-holds/{id}/release', [\App\Http\Controllers\Admin\B2B\SystemOperationController::class, 'releaseCreditHold'])->name('operations.credit-holds.release')->middleware('quyen:b2b_operation.release_hold');
 

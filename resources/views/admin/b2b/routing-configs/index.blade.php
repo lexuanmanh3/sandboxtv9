@@ -65,6 +65,10 @@
       margin: 0 !important;
       display: inline-block !important;
     }
+    #productDropdownPanel[hidden],
+    #productDropdownPanel.is-hidden {
+      display: none !important;
+    }
   </style>
 @endpush
 
@@ -94,13 +98,23 @@
     </div>
   </header>
 
-  @if (session('success') || session('error'))
+  @if (session('success') || session('error') || $errors->any())
     <section class="account-alerts" aria-live="polite">
       @if (session('success'))
         <div class="account-alert account-alert--success">{{ session('success') }}</div>
       @endif
       @if (session('error'))
         <div class="account-alert account-alert--danger">{{ session('error') }}</div>
+      @endif
+      @if ($errors->any())
+        <div class="account-alert account-alert--danger">
+          <strong>Vui lòng kiểm tra lại dữ liệu nhập vào:</strong>
+          <ul style="margin: 4px 0 0 18px; padding: 0;">
+            @foreach ($errors->all() as $error)
+              <li>{{ $error }}</li>
+            @endforeach
+          </ul>
+        </div>
       @endif
     </section>
   @endif
@@ -172,14 +186,14 @@
             <tr>
               <td style="text-align: center;">
                 <div class="account-row-actions">
-                  <button class="account-row-action" type="button" onclick="toggleDropdown(this, 'action-{{ $config->id }}')">
+                  <button class="account-row-action" type="button" onclick="toggleDropdown(this, 'action-{{ $config->id }}', event)">
                     <span>Hành động</span>
                     <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                       <path d="M5 7.5 10 12.5 15 7.5" />
                     </svg>
                   </button>
-                  <div id="action-{{ $config->id }}" class="account-row-menu" hidden>
-                    <button type="button" onclick="openRoutingModal('edit', {{ $config->id }})" style="width: 100%; text-align: left;">
+                  <div id="action-{{ $config->id }}" class="account-row-menu" hidden onclick="event.stopPropagation()">
+                    <button type="button" onclick="openRoutingModal('edit', {{ $config->id }}); closeAllDropdowns();" style="width: 100%; text-align: left;">
                       Sửa cấu hình
                     </button>
                     <form action="{{ route('admin.b2b.routing-configs.destroy', $config->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa cấu hình này không?');">
@@ -208,10 +222,20 @@
               </td>
               <td>
                 <div style="font-weight: 600; color: var(--admin-slate-800);">DV: {{ $config->dichVu?->ten_dich_vu ?? 'Dịch vụ #' . $config->dich_vu_id }}</div>
-                @if($config->san_pham_id)
-                  <div style="font-size: 12px; color: var(--admin-slate-500);">SP: {{ $config->sanPham?->ten_san_pham ?? 'SP #' . $config->san_pham_id }}</div>
+                @if(!empty($config->danh_sach_san_pham_id) && count($config->danh_sach_san_pham_id) > 1)
+                  <div style="font-size: 12px; color: var(--admin-brand-700); font-weight: 700;">
+                    SP: {{ count($config->danh_sach_san_pham_id) }} sản phẩm áp dụng
+                  </div>
+                @elseif($config->san_pham_id || (!empty($config->danh_sach_san_pham_id) && count($config->danh_sach_san_pham_id) === 1))
+                  @php
+                    $spId = $config->san_pham_id ?: ($config->danh_sach_san_pham_id[0] ?? null);
+                    $spName = $config->sanPham?->ten_san_pham ?? ($products->firstWhere('id', $spId)?->ten_san_pham ?? 'SP #' . $spId);
+                  @endphp
+                  <div style="font-size: 12px; color: var(--admin-slate-600);">SP: {{ $spName }}</div>
                 @elseif($config->loai_san_pham_id)
                   <div style="font-size: 12px; color: var(--admin-slate-500);">Loại: {{ $config->loaiSanPham?->ten_loai_san_pham ?? 'Loại #' . $config->loai_san_pham_id }}</div>
+                @else
+                  <div style="font-size: 11px; color: var(--admin-slate-400); font-style: italic;">Toàn bộ sản phẩm dịch vụ</div>
                 @endif
               </td>
               <td>
@@ -306,15 +330,48 @@
 
         {{-- HÀNG 2: SẢN PHẨM & ĐẠI LÝ ÁP DỤNG --}}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-top: 14px;">
-          <label style="display: grid; gap: 6px;">
-            <span style="font-size: 12px; font-weight: 800; color: var(--admin-slate-600); text-transform: uppercase;">Sản phẩm cụ thể</span>
-            <select name="san_pham_id" id="modal_san_pham_id" style="min-height: 38px; border: 1px solid var(--admin-slate-300); border-radius: 6px; padding: 6px 10px;">
-              <option value="">-- Áp dụng cho toàn bộ dịch vụ/loại SP --</option>
-              @foreach($products as $product)
-                <option value="{{ $product->id }}" data-dich-vu="{{ $product->dich_vu_id }}" data-loai-sp="{{ $product->loai_san_pham_id }}">{{ $product->ten_san_pham }}</option>
-              @endforeach
-            </select>
-          </label>
+          <div style="display: grid; gap: 6px; position: relative;" id="multiProductWrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 12px; font-weight: 800; color: var(--admin-slate-600); text-transform: uppercase;">Sản phẩm áp dụng (Chọn nhiều)</span>
+              <span id="productSelectionCount" style="font-size: 11px; font-weight: 700; color: var(--admin-brand-600);">Tất cả sản phẩm</span>
+            </div>
+
+            <div id="productDropdownTrigger" onclick="toggleProductDropdown(event)" style="min-height: 38px; border: 1px solid var(--admin-slate-300); border-radius: 6px; padding: 6px 10px; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <div id="productSelectedBadges" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-height: 60px; overflow-y: auto; flex: 1;">
+                <span style="color: var(--admin-slate-500); font-size: 13px;">-- Áp dụng cho toàn bộ dịch vụ/loại SP --</span>
+              </div>
+              <svg viewBox="0 0 20 20" fill="currentColor" style="width: 16px; height: 16px; color: var(--admin-slate-400); flex-shrink: 0;">
+                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </div>
+
+            {{-- DROPDOWN PANEL TÌM KIẾM VÀ TÍCH CHỌN SẢN PHẨM --}}
+            <div id="productDropdownPanel" class="is-hidden" hidden style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid var(--admin-slate-200); border-radius: 8px; box-shadow: 0 12px 28px rgba(15,23,42,0.18); z-index: 100; padding: 12px; flex-direction: column; gap: 8px;">
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="text" id="productSearchInput" oninput="filterProductCheckboxList(this.value)" placeholder="Tìm mệnh giá / sản phẩm..." style="flex: 1; min-height: 32px; padding: 4px 10px; font-size: 12px; border: 1px solid var(--admin-slate-300); border-radius: 6px;">
+                <button type="button" class="account-btn" onclick="selectAllFilteredProducts(true)" style="padding: 4px 10px; font-size: 11px; height: 32px; background: var(--admin-brand-50); color: var(--admin-brand-700); border: 1px solid var(--admin-brand-200); border-radius: 6px; cursor: pointer; white-space: nowrap;">Chọn hết</button>
+                <button type="button" class="account-btn" onclick="selectAllFilteredProducts(false)" style="padding: 4px 10px; font-size: 11px; height: 32px; background: var(--admin-slate-100); color: var(--admin-slate-700); border: 1px solid var(--admin-slate-200); border-radius: 6px; cursor: pointer; white-space: nowrap;">Bỏ chọn</button>
+                <button type="button" onclick="closeProductDropdown(event)" title="Đóng panel" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; flex-shrink: 0;">✕</button>
+              </div>
+              <div id="productCheckboxContainer" style="overflow-y: auto; max-height: 190px; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
+                {{-- Checkbox items rendered dynamically --}}
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--admin-slate-200); padding-top: 8px; margin-top: 2px;">
+                <span style="font-size: 12px; color: var(--admin-slate-600);">
+                  Đã chọn: <strong id="productSelectionFooterCount" style="color: var(--admin-brand-700);">0</strong> sản phẩm
+                </span>
+                <button type="button" class="account-btn account-btn--primary" onclick="closeProductDropdown(event)" style="padding: 4px 14px; font-size: 12px; height: 30px; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer;">
+                  <svg viewBox="0 0 20 20" fill="currentColor" style="width: 14px; height: 14px;">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  <span>Xong (Đóng)</span>
+                </button>
+              </div>
+            </div>
+
+            {{-- Hidden inputs container --}}
+            <div id="hiddenProductInputs"></div>
+          </div>
 
           <label style="display: grid; gap: 6px;">
             <span style="font-size: 12px; font-weight: 800; color: var(--admin-slate-600); text-transform: uppercase;">Cấu hình cho Đại lý</span>
@@ -416,8 +473,9 @@ const configsData = @json($configs->keyBy('id'));
 const categoriesData = @json($categories);
 const productsData = @json($products);
 
-function toggleDropdown(button, menuId) {
-  event.stopPropagation();
+function toggleDropdown(button, menuId, evt) {
+  const e = evt || window.event;
+  if (e) e.stopPropagation();
   const wrapper = button.closest('.account-row-actions');
   const menu = document.getElementById(menuId);
   if (!menu) return;
@@ -430,7 +488,11 @@ function toggleDropdown(button, menuId) {
     menu.hidden = false;
     const rect = button.getBoundingClientRect();
     menu.style.position = 'fixed';
-    menu.style.left = rect.left + 'px';
+    let left = rect.left;
+    if (left + 170 > window.innerWidth) {
+      left = window.innerWidth - 180;
+    }
+    menu.style.left = Math.max(10, left) + 'px';
     menu.style.top = (rect.bottom + 4) + 'px';
   }
 }
@@ -443,6 +505,52 @@ function closeAllDropdowns() {
 document.addEventListener('click', closeAllDropdowns);
 window.addEventListener('scroll', closeAllDropdowns, { passive: true, capture: true });
 window.addEventListener('resize', closeAllDropdowns, { passive: true });
+
+let selectedProductIds = new Set();
+let currentFilteredProducts = [];
+
+function toggleProductDropdown(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  const panel = document.getElementById('productDropdownPanel');
+  if (!panel) return;
+
+  const isHidden = panel.hidden || panel.classList.contains('is-hidden') || panel.style.display === 'none' || getComputedStyle(panel).display === 'none';
+  if (isHidden) {
+    panel.hidden = false;
+    panel.classList.remove('is-hidden');
+    panel.style.display = 'flex';
+    setTimeout(() => {
+      const input = document.getElementById('productSearchInput');
+      if (input) input.focus();
+    }, 50);
+  } else {
+    closeProductDropdown(e);
+  }
+}
+
+function closeProductDropdown(e) {
+  if (e) {
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+  }
+  const panel = document.getElementById('productDropdownPanel');
+  if (panel) {
+    panel.hidden = true;
+    panel.classList.add('is-hidden');
+    panel.style.display = 'none';
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('productDropdownPanel');
+  const trigger = document.getElementById('productDropdownTrigger');
+  if (!panel) return;
+  if (panel.hidden || panel.classList.contains('is-hidden') || panel.style.display === 'none') return;
+
+  if (!panel.contains(e.target) && !trigger.contains(e.target)) {
+    closeProductDropdown(e);
+  }
+});
 
 function updateLoaiSanPhamOptions(dichVuId, selectedId = '') {
   const lspSelect = document.getElementById('modal_loai_san_pham_id');
@@ -466,31 +574,137 @@ function updateLoaiSanPhamOptions(dichVuId, selectedId = '') {
     lspSelect.appendChild(opt);
   });
 
-  updateSanPhamOptions(dvStr, lspSelect.value);
+  updateSanPhamOptions(dvStr, lspSelect.value, Array.from(selectedProductIds));
 }
 
-function updateSanPhamOptions(dichVuId, loaiSpId, selectedId = '') {
-  const spSelect = document.getElementById('modal_san_pham_id');
+function updateSanPhamOptions(dichVuId, loaiSpId, selectedIds = []) {
   const dvStr = dichVuId ? String(dichVuId) : document.getElementById('modal_dich_vu_id').value;
   const lspStr = loaiSpId ? String(loaiSpId) : '';
-  const currentVal = (selectedId !== null && selectedId !== undefined && selectedId !== '') ? String(selectedId) : '';
 
-  spSelect.innerHTML = '<option value="">-- Áp dụng cho toàn bộ dịch vụ/loại SP --</option>';
+  if (Array.isArray(selectedIds)) {
+    selectedProductIds = new Set(selectedIds.map(id => String(id)));
+  } else if (selectedIds) {
+    selectedProductIds = new Set([String(selectedIds)]);
+  }
 
-  const filtered = productsData.filter(p => {
+  currentFilteredProducts = productsData.filter(p => {
     if (lspStr && String(p.loai_san_pham_id) !== lspStr) return false;
     if (dvStr && String(p.dich_vu_id) !== dvStr) return false;
     return true;
   });
 
-  filtered.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.ten_san_pham;
-    if (String(p.id) === currentVal) {
-      opt.selected = true;
+  renderProductCheckboxes('');
+  renderSelectedProductBadges();
+}
+
+function renderProductCheckboxes(searchTerm = '') {
+  const container = document.getElementById('productCheckboxContainer');
+  container.innerHTML = '';
+
+  const term = (searchTerm || '').toLowerCase().trim();
+  const itemsToRender = currentFilteredProducts.filter(p => {
+    return !term || p.ten_san_pham.toLowerCase().includes(term);
+  });
+
+  if (itemsToRender.length === 0) {
+    container.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--admin-slate-400); font-size: 12px;">Không có sản phẩm nào phù hợp</div>';
+    return;
+  }
+
+  itemsToRender.forEach(p => {
+    const isChecked = selectedProductIds.has(String(p.id));
+    const label = document.createElement('label');
+    label.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; user-select: none; transition: background 0.15s;';
+    label.onmouseover = () => label.style.background = 'var(--admin-slate-50, #f8fafc)';
+    label.onmouseout = () => label.style.background = 'transparent';
+
+    label.innerHTML = `
+      <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} onchange="onProductCheckboxChange(this, '${p.id}')" style="width: 16px !important; height: 16px !important; accent-color: var(--admin-brand-600); cursor: pointer;">
+      <span style="font-weight: ${isChecked ? '700' : '500'}; color: ${isChecked ? 'var(--admin-brand-700)' : 'var(--admin-slate-700)'};">${p.ten_san_pham}</span>
+    `;
+    container.appendChild(label);
+  });
+}
+
+function filterProductCheckboxList(term) {
+  renderProductCheckboxes(term);
+}
+
+function selectAllFilteredProducts(selectAll) {
+  const term = (document.getElementById('productSearchInput').value || '').toLowerCase().trim();
+  const items = currentFilteredProducts.filter(p => !term || p.ten_san_pham.toLowerCase().includes(term));
+  
+  items.forEach(p => {
+    const pid = String(p.id);
+    if (selectAll) {
+      selectedProductIds.add(pid);
+    } else {
+      selectedProductIds.delete(pid);
     }
-    spSelect.appendChild(opt);
+  });
+
+  renderProductCheckboxes(term);
+  renderSelectedProductBadges();
+}
+
+function onProductCheckboxChange(checkbox, productId) {
+  const pid = String(productId);
+  if (checkbox.checked) {
+    selectedProductIds.add(pid);
+  } else {
+    selectedProductIds.delete(pid);
+  }
+  renderSelectedProductBadges();
+}
+
+function removeProductSelection(productId, e) {
+  if (e) e.stopPropagation();
+  selectedProductIds.delete(String(productId));
+  const term = (document.getElementById('productSearchInput').value || '').trim();
+  renderProductCheckboxes(term);
+  renderSelectedProductBadges();
+}
+
+function renderSelectedProductBadges() {
+  const badgesContainer = document.getElementById('productSelectedBadges');
+  const countSpan = document.getElementById('productSelectionCount');
+  const hiddenInputs = document.getElementById('hiddenProductInputs');
+
+  badgesContainer.innerHTML = '';
+  hiddenInputs.innerHTML = '';
+
+  const footerCount = document.getElementById('productSelectionFooterCount');
+
+  if (selectedProductIds.size === 0) {
+    badgesContainer.innerHTML = '<span style="color: var(--admin-slate-500); font-size: 13px;">-- Áp dụng cho toàn bộ dịch vụ/loại SP --</span>';
+    countSpan.innerText = 'Tất cả sản phẩm';
+    countSpan.style.color = 'var(--admin-slate-500)';
+    if (footerCount) footerCount.innerText = '0';
+    return;
+  }
+
+  countSpan.innerText = `Đã chọn ${selectedProductIds.size} sản phẩm`;
+  countSpan.style.color = 'var(--admin-brand-600)';
+  if (footerCount) footerCount.innerText = selectedProductIds.size;
+
+  selectedProductIds.forEach(idStr => {
+    const prod = productsData.find(p => String(p.id) === idStr);
+    const prodName = prod ? prod.ten_san_pham : ('SP #' + idStr);
+
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'san_pham_ids[]';
+    hidden.value = idStr;
+    hiddenInputs.appendChild(hidden);
+
+    const badge = document.createElement('span');
+    badge.className = 'product-badge-tag';
+    badge.style.cssText = 'display: inline-flex; align-items: center; gap: 4px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;';
+    badge.innerHTML = `
+      <span>${prodName}</span>
+      <span onclick="removeProductSelection('${idStr}', event)" style="cursor: pointer; font-weight: bold; color: #dc2626; font-size: 13px; line-height: 1; padding: 0 2px;">×</span>
+    `;
+    badgesContainer.appendChild(badge);
   });
 }
 
@@ -500,10 +714,11 @@ function onDichVuChange(dichVuId) {
 
 function onLoaiSanPhamChange(loaiSpId) {
   const dvId = document.getElementById('modal_dich_vu_id').value;
-  updateSanPhamOptions(dvId, loaiSpId, '');
+  updateSanPhamOptions(dvId, loaiSpId, Array.from(selectedProductIds));
 }
 
 function openRoutingModal(action, id = null) {
+  closeProductDropdown();
   const modal = document.getElementById('routingModal');
   const form = document.getElementById('routingForm');
   const methodContainer = document.getElementById('routingMethodContainer');
@@ -520,7 +735,7 @@ function openRoutingModal(action, id = null) {
     document.getElementById('modal_nha_cung_cap_id').value = '';
     document.getElementById('modal_dich_vu_id').value = '';
     updateLoaiSanPhamOptions('', '');
-    updateSanPhamOptions('', '', '');
+    updateSanPhamOptions('', '', []);
     document.getElementById('modal_dai_ly_api_id').value = '';
     document.getElementById('modal_ten_cau_hinh').value = '';
     document.getElementById('modal_dang_mo').checked = true;
@@ -537,7 +752,7 @@ function openRoutingModal(action, id = null) {
 
     title.innerText = 'Cập nhật cấu hình dịch vụ #' + config.id;
     submitText.innerText = 'Cập nhật tuyến';
-    form.action = '/admin/b2b/routing-configs/' + config.id;
+    form.action = '{{ route("admin.b2b.routing-configs.update", ":id") }}'.replace(':id', config.id);
     methodContainer.innerHTML = '<input type="hidden" name="_method" value="PUT">';
 
     // Populate data
@@ -545,13 +760,28 @@ function openRoutingModal(action, id = null) {
     document.getElementById('modal_dich_vu_id').value = config.dich_vu_id || '';
     
     updateLoaiSanPhamOptions(config.dich_vu_id || '', config.loai_san_pham_id || '');
-    updateSanPhamOptions(config.dich_vu_id || '', config.loai_san_pham_id || '', config.san_pham_id || '');
+    
+    let selectedProdIds = [];
+    if (config.danh_sach_san_pham_id) {
+      if (typeof config.danh_sach_san_pham_id === 'string') {
+        try {
+          selectedProdIds = JSON.parse(config.danh_sach_san_pham_id);
+        } catch (e) {
+          selectedProdIds = [];
+        }
+      } else if (Array.isArray(config.danh_sach_san_pham_id)) {
+        selectedProdIds = config.danh_sach_san_pham_id;
+      }
+    } else if (config.san_pham_id) {
+      selectedProdIds = [config.san_pham_id];
+    }
+    updateSanPhamOptions(config.dich_vu_id || '', config.loai_san_pham_id || '', selectedProdIds);
     
     document.getElementById('modal_dai_ly_api_id').value = config.dai_ly_ap_dung_id || '';
     document.getElementById('modal_ten_cau_hinh').value = config.ten_cau_hinh || '';
     document.getElementById('modal_dang_mo').checked = !!config.dang_mo;
     document.getElementById('modal_muc_uu_tien').value = config.muc_uu_tien !== null ? config.muc_uu_tien : 1;
-    document.getElementById('modal_mo_ta').value = config.ten_cau_hinh || '';
+    document.getElementById('modal_mo_ta').value = config.mo_ta || config.ten_cau_hinh || '';
     document.getElementById('modal_timeout_he_thong_giay').value = config.timeout_he_thong_giay || 30;
     document.getElementById('modal_timeout_gui_ncc_giay').value = config.timeout_gui_ncc_giay || 25;
     document.getElementById('modal_thoi_gian_tra_ket_qua_giay').value = config.thoi_gian_tra_ket_qua_giay || 60;
@@ -564,6 +794,29 @@ function openRoutingModal(action, id = null) {
 
 function closeRoutingModal() {
   document.getElementById('routingModal').hidden = true;
+  closeProductDropdown();
 }
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const panel = document.getElementById('productDropdownPanel');
+    if (panel && !panel.hidden) {
+      closeProductDropdown();
+      e.stopPropagation();
+      return;
+    }
+    closeRoutingModal();
+    closeAllDropdowns();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('action') === 'create') {
+    openRoutingModal('create');
+  } else if (urlParams.get('edit')) {
+    openRoutingModal('edit', urlParams.get('edit'));
+  }
+});
 </script>
 @endpush

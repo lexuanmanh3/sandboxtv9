@@ -16,6 +16,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('provider:sync-products appotapay')->hourly()->withoutOverlapping();
+        $schedule->command('topup:reconcile-pending')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('b2b:recover-outbox')->everyMinute()->withoutOverlapping();
     }
 
     /**

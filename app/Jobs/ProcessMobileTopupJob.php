@@ -57,6 +57,10 @@ class ProcessMobileTopupJob implements ShouldQueue
         });
         if (!$donHang) return;
 
+        \App\Models\B2bOrderOutbox::where('don_hang_id', $donHang->id)
+            ->where('status', 'PENDING')
+            ->update(['status' => 'PROCESSING', 'locked_until' => now()->addMinutes(5)]);
+
         // Chống nạp trùng khi worker trước bị timeout/crash giữa chừng:
         // Nếu đã có lần gọi CHARGING đang PROCESSING, tuyệt đối không tạo partner_ref_id mới
         $inFlightCall = $donHang->lanGoiNhaCungCap()
@@ -83,6 +87,7 @@ class ProcessMobileTopupJob implements ShouldQueue
         foreach ($routing->danhSach($donHang) as $mapping) {
             $lanGoi = LanGoiNhaCungCap::create([
                 'don_hang_id' => $donHang->id,
+                'cau_hinh_dich_vu_id' => $mapping->cauHinhDichVu?->id,
                 'nha_cung_cap_id' => $mapping->nha_cung_cap_id,
                 'ket_noi_nha_cung_cap_id' => $mapping->ket_noi_nha_cung_cap_id,
                 'san_pham_nha_cung_cap_id' => $mapping->id,
@@ -157,6 +162,7 @@ class ProcessMobileTopupJob implements ShouldQueue
                     if ($order->dai_ly_api_id) {
                         app(\App\Services\DaiLyApi\B2bCreditService::class)->chotCongNoThanhCong($order);
                         app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.success');
+                        \App\Models\B2bOrderOutbox::where('don_hang_id', $order->id)->update(['status' => 'PROCESSED', 'processed_at' => now()]);
                     }
                 } elseif ($ketQua->ketQua === KetQuaNhaCungCap::UNKNOWN_OR_PENDING) {
                     $state->chuyen($order, TrangThaiDonHang::PROVIDER_PENDING, 'Kết quả NCC chưa xác định');
@@ -210,6 +216,11 @@ class ProcessMobileTopupJob implements ShouldQueue
             }
 
             if ($ketQua->ketQua !== KetQuaNhaCungCap::DEFINITIVE_FAILURE) return;
+
+            // Nếu tuyến cấu hình chặn fallback khi lỗi chắc chắn (ket_thuc_cau_hinh), dừng luồng ngay không thử NCC khác
+            if ($mapping->cauHinhDichVu?->ket_thuc_cau_hinh) {
+                break;
+            }
         }
 
         DB::transaction(function () use ($donHang, $state) {
@@ -234,6 +245,7 @@ class ProcessMobileTopupJob implements ShouldQueue
                 if ($order->dai_ly_api_id) {
                     app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($order, 'Tất cả NCC đều thất bại chắc chắn');
                     app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($order, 'order.failed');
+                    \App\Models\B2bOrderOutbox::where('don_hang_id', $order->id)->update(['status' => 'PROCESSED', 'processed_at' => now()]);
                 }
             }
         });

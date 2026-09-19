@@ -45,9 +45,9 @@
         <span>Trạng thái khoản giữ</span>
         <select name="trang_thai">
           <option value="">-- Tất cả trạng thái --</option>
-          <option value="DANG_GIU" @selected(request('trang_thai') === 'DANG_GIU')>Đang giữ (Treo)</option>
-          <option value="DA_CHOT" @selected(request('trang_thai') === 'DA_CHOT')>Đã chốt (Trừ nợ)</option>
-          <option value="DA_GIAI_PHONG" @selected(request('trang_thai') === 'DA_GIAI_PHONG')>Đã giải phóng (Nhả)</option>
+          <option value="HOLDING" @selected(request('trang_thai') === 'HOLDING' || request('trang_thai') === 'DANG_GIU')>Đang giữ (HOLDING)</option>
+          <option value="COMMITTED" @selected(request('trang_thai') === 'COMMITTED' || request('trang_thai') === 'DA_CHOT')>Đã chốt (COMMITTED)</option>
+          <option value="RELEASED" @selected(request('trang_thai') === 'RELEASED' || request('trang_thai') === 'DA_GIAI_PHONG')>Đã giải phóng (RELEASED)</option>
         </select>
       </label>
 
@@ -85,7 +85,7 @@
           @forelse ($holds as $hold)
             <tr>
               <td style="text-align: center;">
-                @if($hold->trang_thai === 'DANG_GIU')
+                @if(in_array($hold->trang_thai, ['HOLDING', 'DANG_GIU'], true))
                   <form action="{{ route('admin.b2b.operations.credit-holds.release', $hold->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc muốn GIẢI PHÓNG khoản tiền này cho đại lý? Chỉ thực hiện khi đơn hàng đã hủy hoặc thất bại ở NCC.');">
                     @csrf
                     <button type="submit" class="account-btn account-btn--muted account-btn--sm" style="min-height: 28px; padding: 4px 10px; font-size: 12px; color: #dc2626; border-color: #fecaca;" title="Nhả lại hạn mức">
@@ -117,16 +117,16 @@
               </td>
               <td>
                 <div>{{ $hold->created_at->format('d/m/Y H:i') }}</div>
-                @if($hold->trang_thai === 'DANG_GIU')
+                @if(in_array($hold->trang_thai, ['HOLDING', 'DANG_GIU'], true))
                   <div style="font-size: 11px; color: #dc2626; font-weight: 600;">Treo {{ $hold->created_at->diffForHumans() }}</div>
                 @endif
               </td>
               <td style="text-align: center;">
-                @if($hold->trang_thai === 'DANG_GIU')
+                @if(in_array($hold->trang_thai, ['HOLDING', 'DANG_GIU'], true))
                   <span class="account-status-pill" style="background: #fef3c7; color: #d97706;">Đang giữ</span>
-                @elseif($hold->trang_thai === 'DA_CHOT')
+                @elseif(in_array($hold->trang_thai, ['COMMITTED', 'DA_CHOT'], true))
                   <span class="account-status-pill is-yes">Đã chốt</span>
-                @elseif($hold->trang_thai === 'DA_GIAI_PHONG')
+                @elseif(in_array($hold->trang_thai, ['RELEASED', 'DA_GIAI_PHONG'], true))
                   <span class="account-status-pill is-no">Đã giải phóng</span>
                 @endif
               </td>

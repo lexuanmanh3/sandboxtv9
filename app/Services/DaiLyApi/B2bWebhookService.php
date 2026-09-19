@@ -31,8 +31,11 @@ class B2bWebhookService
             return null;
         }
 
+        // Sử dụng UUIDv5 tất định dựa trên don_hang_id và event_type để định danh sự kiện ổn định
+        $eventId = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_OID, "b2b_webhook:{$donHang->id}:{$eventType}")->toString();
+
         $payload = [
-            'event_id' => (string) Str::uuid(),
+            'event_id' => $eventId,
             'event_type' => $eventType,
             'timestamp' => time(),
             'data' => [
@@ -50,19 +53,23 @@ class B2bWebhookService
             ],
         ];
 
-        $outbox = WebhookOutbox::create([
-            'event_id' => $payload['event_id'],
-            'dai_ly_api_id' => $daiLy->id,
-            'don_hang_id' => $donHang->id,
-            'event_type' => $eventType,
-            'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            'trang_thai' => 'PENDING',
-            'so_lan_thu' => 0,
-            'lan_thu_tiep_theo' => now(),
-        ]);
+        $outbox = WebhookOutbox::firstOrCreate(
+            ['event_id' => $eventId],
+            [
+                'dai_ly_api_id' => $daiLy->id,
+                'don_hang_id' => $donHang->id,
+                'event_type' => $eventType,
+                'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+                'trang_thai' => 'PENDING',
+                'so_lan_thu' => 0,
+                'lan_thu_tiep_theo' => now(),
+            ]
+        );
 
-        // Dispatch job gửi webhook sau khi transaction commit
-        SendB2bWebhookJob::dispatch($outbox->id)->afterCommit();
+        // Chỉ dispatch job gửi webhook sau khi transaction commit nếu outbox vừa được tạo mới
+        if ($outbox->wasRecentlyCreated) {
+            SendB2bWebhookJob::dispatch($outbox->id)->afterCommit();
+        }
 
         return $outbox;
     }

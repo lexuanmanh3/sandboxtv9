@@ -1,0 +1,524 @@
+================================================================================
+           ĐẶC TẢ KỸ THUẬT & HƯỚNG DẪN TÍCH HỢP B2B API V1
+                     (B2B API SPECIFICATION V1)
+              HỆ THỐNG DỊCH VỤ TOPUP & GIẢI PHÁP SỐ TV9TECH
+================================================================================
+Phiên bản: 1.0.0
+Cập nhật: 19/09/2026
+Môi trường Sandbox: https://sandboxtv9.online/api/b2b/v1
+Môi trường Production: https://api.tv9tech.vn/api/b2b/v1
+================================================================================
+
+MỤC LỤC:
+  1. NGUYÊN TẮC BẢO MẬT & VẬN HÀNH BẮT BUỘC
+  2. XÁC THỰC & CHỮ KÝ SỐ (HMAC-SHA256)
+  3. TEST VECTOR THAM CHIẾU (KIỂM THỬ THUẬT TOÁN KÝ)
+  4. MÃ NGUỒN MẪU TẠO CHỮ KÝ & GỌI API (PHP, NODEJS, PYTHON, CURL)
+  5. DANH MỤC CHI TIẾT CÁC ENDPOINT API
+     5.1. Ping & Kiểm tra kết nối mạng (Test Connection)
+     5.2. Tra cứu dịch vụ & Danh mục sản phẩm (GET /services)
+     5.3. Tra cứu hạn mức tín dụng & Công nợ (GET /credit)
+     5.4. Tạo đơn hàng nạp tiền (POST /orders)
+     5.5. Tra cứu đơn hàng theo ID (GET /orders/{id})
+     5.6. Tra cứu danh sách đơn hàng có bộ lọc (GET /orders)
+  6. QUY TRÌNH XỬ LÝ RETRY & ĐẢM BẢO AN TOÀN GIAO DỊCH (IDEMPOTENCY)
+  7. CẤU HÌNH & XÁC THỰC WEBHOOK KẾT QUẢ TỰ ĐỘNG
+  8. BẢNG MÃ SẢN PHẨM & MÃ NHÀ MẠNG
+  9. BẢNG MÃ TRẠNG THÁI ĐƠN HÀNG & MÃ LỖI CHUẨN HÓA
+  10. QUY TRÌNH 4 BƯỚC TEST SANDBOX & NGHIỆM THU GO-LIVE
+
+================================================================================
+1. NGUYÊN TẮC BẢO MẬT & VẬN HÀNH BẮT BUỘC
+================================================================================
+1.1. Chuẩn API Thống Nhất:
+   - Endpoint tạo đơn chuẩn hóa: POST /api/b2b/v1/orders
+   - Tuyệt đối không sử dụng các endpoint thử nghiệm hoặc endpoint nới lỏng tham số.
+
+1.2. Ký số HMAC-SHA256 toàn diện:
+   - Mọi request (kể cả GET tra cứu và POST tạo đơn) đều phải có chữ ký số HMAC-SHA256.
+   - Chữ ký xác thực danh tính đối tác, tính toàn vẹn payload và chống Replay Attack.
+
+1.3. Idempotency bắt buộc đối với thay đổi trạng thái:
+   - Mọi request POST tạo đơn BẮT BUỘC truyền header "Idempotency-Key" dạng UUID v4.
+   - Idempotency-Key phải được sinh và lưu bền vững trong database của đối tác 
+     trước khi gửi request sang TV9.
+
+1.4. Cơ chế bảo vệ hạn mức & Transactional Outbox:
+   - Khi tiếp nhận đơn hợp lệ, hệ thống lập tức tạm giữ hạn mức (HOLDING).
+   - Tiến trình worker thực hiện gọi nhà mạng qua hàng đợi an toàn.
+
+1.5. Nguyên tắc trạng thái bất định (Timeout / Pending):
+   - Khi chưa nhận được phản hồi dứt khoát từ nhà mạng viễn thông, đơn hàng được bảo 
+     lưu ở trạng thái "pending" hoặc "manual_review".
+   - NGHIÊM CẤM đối tác tự ý hoàn tiền, nhả hạn mức hoặc tự động phát sinh lệnh nạp mới
+     khi đơn hàng chưa có kết quả thất bại dứt khoát (failed).
+
+
+================================================================================
+2. XÁC THỰC & CHỮ KÝ SỐ (HMAC-SHA256)
+================================================================================
+2.1. Danh Sách Headers Bắt Buộc:
+
++--------------------+---------------+-----------+-----------------------------+
+| Header             | Kiểu dữ liệu  | Bắt buộc  | Mô tả chi tiết              |
++--------------------+---------------+-----------+-----------------------------+
+| X-Client-Id        | String        | Có        | Client ID do TV9 cấp        |
+| X-Timestamp        | Integer       | Có        | Unix timestamp (giây).      |
+|                    |               |           | Sai lệch tối đa: +/- 300s   |
+| X-Nonce            | String        | Có        | Chuỗi ngẫu nhiên (>= 16 ký  |
+|                    |               |           | tự), duy nhất trong 10 phút |
+| X-Signature        | String        | Có        | Chữ ký HMAC SHA-256 (64 hex)|
+| Idempotency-Key    | String (UUID) | Có (POST) | UUID v4 duy nhất mỗi đơn    |
+| Content-Type       | String        | Có (POST) | application/json            |
++--------------------+---------------+-----------+-----------------------------+
+
+2.2. Chuẩn Canonical String (6 Dòng Thống Nhất):
+Chuỗi Canonical String được ghép chính xác từ 6 dòng, ngăn cách bởi ký tự xuống dòng (\n):
+
+METHOD
+CANONICAL_PATH_WITH_QUERY
+TIMESTAMP
+NONCE
+IDEMPOTENCY_KEY
+BODY_SHA256
+
+Quy tắc chi tiết:
+- Dòng 1: METHOD viết in hoa ('GET', 'POST', 'PUT', 'DELETE').
+- Dòng 2: URI Path kèm Query String (ví dụ: '/api/b2b/v1/orders' hoặc 
+  '/api/b2b/v1/orders?limit=20&page=1'). Nếu có query string, sắp xếp alphabet (ksort).
+- Dòng 3: Giá trị nguyên của X-Timestamp (ví dụ: '1726700000').
+- Dòng 4: Chuỗi nguyên bản của X-Nonce.
+- Dòng 5: Chuỗi Idempotency-Key (nếu là GET thì để trống dòng này, vẫn giữ ký tự \n).
+- Dòng 6: Mã băm SHA-256 ở dạng hex chữ thường của raw JSON request body.
+  Nếu request không có body (như GET), tính hash của chuỗi rỗng '':
+  hash('sha256', '') = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+
+2.3. Công thức tính Signature:
+Signature = hash_hmac('sha256', Canonical_String, Secret_Key)
+
+
+================================================================================
+3. TEST VECTOR THAM CHIẾU (DÙNG ĐỂ KIỂM TRA THUẬT TOÁN KÝ)
+================================================================================
+Đối tác cấu hình bộ tham số mẫu sau để đối chiếu hàm tính chữ ký của mình:
+
+- Secret Key:      test_secret_key_123
+- Method:          POST
+- URI:             /api/b2b/v1/orders
+- X-Timestamp:     1726700000
+- X-Nonce:         a1b2c3d4e5f60718
+- Idempotency-Key: 8f4b1d64-9a3d-47df-9db2-1e9c9c991a01
+- Request Body:    {"partner_order_id":"TEST_VEC_01","product_code":"TOPUP_VTE_10K","account":"0965657810"}
+- Body SHA-256:    d7e008a0df7fc2256ec47a7b8e1f57ecdbb7c0cefa37c569f4eaee0495f57a07
+
+Chuỗi Canonical String (Ghép đúng 6 dòng):
+POST
+/api/b2b/v1/orders
+1726700000
+a1b2c3d4e5f60718
+8f4b1d64-9a3d-47df-9db2-1e9c9c991a01
+d7e008a0df7fc2256ec47a7b8e1f57ecdbb7c0cefa37c569f4eaee0495f57a07
+
+Chữ ký chuẩn tính ra (X-Signature):
+51ec0426b34ef59c0490f23d132626e25539dcf46bc0f5093a863cfdfb12c4c5
+
+
+================================================================================
+4. MÃ NGUỒN MẪU TẠO CHỮ KÝ & GỌI API
+================================================================================
+
+4.1. Mẫu PHP:
+--------------------------------------------------------------------------------
+<?php
+function callB2BApi($method, $uri, $bodyData = null, $idempotencyKey = null) {
+    $clientId = 'YOUR_CLIENT_ID';
+    $secretKey = 'YOUR_SECRET_KEY';
+    $baseUrl = 'https://sandboxtv9.online';
+
+    $timestamp = time();
+    $nonce = bin2hex(random_bytes(16));
+    
+    $bodyJson = $bodyData ? json_encode($bodyData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
+    $bodySha256 = hash('sha256', $bodyJson);
+
+    $canonical = implode("\n", [
+        strtoupper($method),
+        $uri,
+        $timestamp,
+        $nonce,
+        $idempotencyKey ?? '',
+        $bodySha256
+    ]);
+    $signature = hash_hmac('sha256', $canonical, $secretKey);
+
+    $headers = [
+        'Content-Type: application/json',
+        'X-Client-Id: ' . $clientId,
+        'X-Timestamp: ' . $timestamp,
+        'X-Nonce: ' . $nonce,
+        'X-Signature: ' . $signature,
+    ];
+    if ($idempotencyKey) {
+        $headers[] = 'Idempotency-Key: ' . $idempotencyKey;
+    }
+
+    $ch = curl_init($baseUrl . $uri);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+    if ($bodyJson) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $bodyJson);
+    }
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    $res = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return ['http_code' => $httpCode, 'data' => json_decode($res, true)];
+}
+
+
+4.2. Mẫu Node.js (JavaScript):
+--------------------------------------------------------------------------------
+const crypto = require('crypto');
+const axios = require('axios');
+
+async function createB2BOrder() {
+    const clientId = 'YOUR_CLIENT_ID';
+    const secretKey = 'YOUR_SECRET_KEY';
+    const path = '/api/b2b/v1/orders';
+    const timestamp = Math.floor(Date.now() / 1000);
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const idempotencyKey = crypto.randomUUID();
+
+    const payload = {
+        partner_order_id: 'NODE_' + Date.now(),
+        product_code: 'TOPUP_VTE_10K',
+        account: '0965657810'
+    };
+    const bodyJson = JSON.stringify(payload);
+    const bodySha256 = crypto.createHash('sha256').update(bodyJson).digest('hex');
+
+    const canonical = [
+        'POST',
+        path,
+        timestamp,
+        nonce,
+        idempotencyKey,
+        bodySha256
+    ].join('\n');
+
+    const signature = crypto.createHmac('sha256', secretKey).update(canonical).digest('hex');
+
+    const response = await axios.post('https://sandboxtv9.online' + path, payload, {
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Client-Id': clientId,
+            'X-Timestamp': timestamp,
+            'X-Nonce': nonce,
+            'X-Signature': signature,
+            'Idempotency-Key': idempotencyKey
+        }
+    });
+
+    console.log(response.data);
+}
+
+
+4.3. Mẫu Python 3:
+--------------------------------------------------------------------------------
+import time, uuid, secrets, hashlib, hmac, json, requests
+
+def create_order():
+    client_id = 'YOUR_CLIENT_ID'
+    secret_key = 'YOUR_SECRET_KEY'
+    path = '/api/b2b/v1/orders'
+    timestamp = str(int(time.time()))
+    nonce = secrets.token_hex(16)
+    idempotency_key = str(uuid.uuid4())
+
+    payload = {
+        "partner_order_id": f"PY_{int(time.time())}",
+        "product_code": "TOPUP_VTE_10K",
+        "account": "0965657810"
+    }
+    body_json = json.dumps(payload, separators=(',', ':'))
+    body_sha256 = hashlib.sha256(body_json.encode('utf-8')).hexdigest()
+
+    canonical = "\n".join([
+        "POST",
+        path,
+        timestamp,
+        nonce,
+        idempotency_key,
+        body_sha256
+    ])
+    signature = hmac.new(secret_key.encode('utf-8'), canonical.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Client-Id": client_id,
+        "X-Timestamp": timestamp,
+        "X-Nonce": nonce,
+        "X-Signature": signature,
+        "Idempotency-Key": idempotency_key
+    }
+    res = requests.post(f"https://sandboxtv9.online{path}", data=body_json, headers=headers)
+    print(res.status_code, res.json())
+
+
+================================================================================
+5. DANH MỤC CHI TIẾT CÁC ENDPOINT API
+================================================================================
+
+5.1. Ping & Kiểm tra kết nối mạng (Test Connection)
+- Phương thức: GET hoặc HEAD
+- Endpoint: /api/b2b/v1  (hoặc /api/b2b/v1/ping)
+- Không yêu cầu chữ ký HMAC. Phục vụ kiểm tra kết nối mạng và độ trễ.
+- Response (HTTP 200):
+  {
+    "ok": true,
+    "status": "OK",
+    "message": "B2B API Gateway is healthy",
+    "time": "2026-09-19T08:00:00+07:00"
+  }
+
+5.2. Tra cứu dịch vụ & Danh mục sản phẩm (GET /services)
+- Endpoint: GET /api/b2b/v1/services
+- Headers bắt buộc: X-Client-Id, X-Timestamp, X-Nonce, X-Signature
+- Mục đích: Lấy danh sách sản phẩm được cấp phép và bảng giá chiết khấu riêng của đối tác.
+- Response (HTTP 200):
+  {
+    "success": true,
+    "data": [
+      {
+        "id": 1,
+        "code": "TOPUP_VTE_10K",
+        "name": "Viettel 10.000đ",
+        "telco": "VIETTEL",
+        "amount": 10000,
+        "price": 9800,
+        "status": "active"
+      },
+      ...
+    ]
+  }
+
+5.3. Tra cứu hạn mức tín dụng & Công nợ (GET /credit)
+- Endpoint: GET /api/b2b/v1/credit
+- Headers: X-Client-Id, X-Timestamp, X-Nonce, X-Signature
+- Response (HTTP 200):
+  {
+    "success": true,
+    "data": {
+      "credit_limit": 50000000,
+      "current_debt": 12500000,
+      "holding_amount": 50000,
+      "available_limit": 37450000
+    }
+  }
+
+5.4. Tạo đơn hàng nạp tiền (Create Order)
+- Endpoint: POST /api/b2b/v1/orders
+- Headers: Đầy đủ 5 headers xác thực + Idempotency-Key + Content-Type: application/json
+- Request Body (JSON):
+  {
+    "partner_order_id": "DH_20260919_001",
+    "product_code": "TOPUP_VTE_10K",
+    "account": "0965657810"
+  }
+  * partner_order_id: Mã đơn của đối tác, từ 1-64 ký tự [A-Za-z0-9_-], duy nhất.
+  * product_code: Mã sản phẩm nạp tiền chính xác trong bảng sản phẩm.
+  * account: Số điện thoại nhận tiền, đúng 10 chữ số chuẩn ^0[0-9]{9}$.
+- Response thành công (HTTP 202 Accepted):
+  {
+    "success": true,
+    "order_id": 1045,
+    "partner_order_id": "DH_20260919_001",
+    "status": "pending",
+    "product_code": "TOPUP_VTE_10K",
+    "account": "0965657810",
+    "amount": 10000,
+    "price": 9800,
+    "created_at": "2026-09-19T02:15:00+07:00",
+    "completed_at": null
+  }
+
+5.5. Tra cứu đơn hàng theo ID (GET /orders/{id})
+- Endpoint: GET /api/b2b/v1/orders/{id}
+- Response (HTTP 200):
+  {
+    "success": true,
+    "data": {
+      "order_id": 1045,
+      "partner_order_id": "DH_20260919_001",
+      "status": "success",
+      "product_code": "TOPUP_VTE_10K",
+      "account": "0965657810",
+      "amount": 10000,
+      "price": 9800,
+      "created_at": "2026-09-19T02:15:00+07:00",
+      "completed_at": "2026-09-19T02:15:04+07:00"
+    }
+  }
+
+5.6. Tra cứu danh sách đơn hàng có bộ lọc (GET /orders)
+- Endpoint: GET /api/b2b/v1/orders
+- Query Parameters:
+  * partner_order_id: Tìm theo mã đơn của đối tác.
+  * status: Lọc theo trạng thái ('pending', 'processing', 'success', 'failed', 'manual_review').
+  * from_date, to_date: Định dạng 'Y-m-d H:i:s'.
+  * limit: Số lượng đơn trên một trang (mặc định 20, tối đa 100).
+
+
+================================================================================
+6. QUY TRÌNH XỬ LÝ RETRY & ĐẢM BẢO AN TOÀN GIAO DỊCH (IDEMPOTENCY)
+================================================================================
+6.1. Nguyên tắc cốt lõi:
+   - Mỗi đơn hàng phải gắn với một Idempotency-Key (UUID v4) duy nhất do đối tác sinh ra.
+   - Khi mạng chập chờn hoặc timeout, việc retry bằng chính Idempotency-Key đó được cam kết
+     100% không bao giờ bị trừ tiền đúp hoặc sinh đơn đúp.
+
+6.2. Kịch bản lỗi mạng & Timeout:
+   - Khi đối tác gọi POST /orders nhưng gặp lỗi mạng (HTTP 502/504/Timeout hoặc ngắt kết nối):
+     BƯỚC 1: Đối tác gửi lại (Retry) với NGUYÊN VẸN:
+             + Idempotency-Key ban đầu
+             + partner_order_id ban đầu
+             + Payload body ban đầu (product_code, account)
+     BƯỚC 2: Cổng API TV9 tự động nhận diện giao dịch lặp lại an toàn, đọc lại thông tin
+             đơn hàng đã lưu và trả về response tương ứng (kèm header X-Cache: HIT).
+             Hệ thống KHÔNG trừ thêm tiền và KHÔNG tạo đơn mới.
+
+6.3. Quy tắc xử lý trạng thái 'manual_review':
+   - Khi nhà mạng viễn thông nghẽn hoặc trả về mã chờ (PENDING/TIMEOUT), đơn hàng được đưa
+     vào trạng thái 'manual_review'.
+   - Đối tác TUYỆT ĐỐI KHÔNG hoàn tiền cho khách ngay và KHÔNG tự ý tạo đơn mới.
+   - Khi nhà mạng hoàn tất nạp thành công, hệ thống TV9 sẽ tự động kích hoạt Webhook 
+     báo trạng thái 'success' cho đối tác.
+
+
+================================================================================
+7. CẤU HÌNH & XÁC THỰC WEBHOOK KẾT QUẢ TỰ ĐỘNG
+================================================================================
+Khi đơn hàng hoàn tất (thành công hoặc thất bại dứt khoát), hệ thống TV9 sẽ tự động 
+bắn Webhook POST sang URL do đối tác đăng ký.
+
+7.1. Headers Webhook TV9 gửi sang:
+   - Content-Type: application/json
+   - X-Signature: [Chữ ký HMAC SHA-256 tính từ Webhook Raw Body bằng Secret Key]
+
+7.2. Cấu trúc Payload Webhook (JSON):
+{
+  "event_id": "c1f72a44-8d4e-5c79-b1d3-3a5f8b91a022",
+  "event_type": "order.completed",
+  "order_id": 1045,
+  "partner_order_id": "DH_20260919_001",
+  "status": "success",
+  "product_code": "TOPUP_VTE_10K",
+  "account": "0965657810",
+  "amount": 10000,
+  "price": 9800,
+  "completed_at": "2026-09-19T02:15:05+07:00"
+}
+
+7.3. Cách kiểm tra tính hợp lệ của Webhook (PHP):
+   $rawPayload = file_get_contents('php://input');
+   $incomingSignature = $_SERVER['HTTP_X_SIGNATURE'] ?? '';
+   $expectedSignature = hash_hmac('sha256', $rawPayload, $clientSecret);
+
+   if (!hash_equals($expectedSignature, $incomingSignature)) {
+       http_response_code(401);
+       echo json_encode(['error' => 'Chữ ký Webhook không hợp lệ']);
+       exit;
+   }
+
+   // Xử lý cập nhật đơn hàng của đối tác tại đây...
+   http_response_code(200);
+   echo json_encode(['received' => true]);
+
+
+================================================================================
+8. BẢNG MÃ SẢN PHẨM & MÃ NHÀ MẠNG
+================================================================================
++-------------------+----------------+--------------------+--------------------+
+| Nhà mạng (Telco)  | Mệnh giá (VNĐ) | Mã sản phẩm chuẩn  | Mã alias tương thích|
++-------------------+----------------+--------------------+--------------------+
+| Viettel           | 10,000         | TOPUP_VTE_10K      | VTE_TOPUP_10K      |
+| Viettel           | 20,000         | TOPUP_VTE_20K      | VTE_TOPUP_20K      |
+| Viettel           | 30,000         | TOPUP_VTE_30K      | VTE_TOPUP_30K      |
+| Viettel           | 50,000         | TOPUP_VTE_50K      | VTE_TOPUP_50K      |
+| Viettel           | 100,000        | TOPUP_VTE_100K     | VTE_TOPUP_100K     |
+| Viettel           | 200,000        | TOPUP_VTE_200K     | VTE_TOPUP_200K     |
+| Viettel           | 300,000        | TOPUP_VTE_300K     | VTE_TOPUP_300K     |
+| Viettel           | 500,000        | TOPUP_VTE_500K     | VTE_TOPUP_500K     |
+| MobiFone          | 10,000         | TOPUP_VMS_10K      | VMS_TOPUP_10K      |
+| MobiFone          | 20,000         | TOPUP_VMS_20K      | VMS_TOPUP_20K      |
+| MobiFone          | 50,000         | TOPUP_VMS_50K      | VMS_TOPUP_50K      |
+| MobiFone          | 100,000        | TOPUP_VMS_100K     | VMS_TOPUP_100K     |
+| MobiFone          | 200,000        | TOPUP_VMS_200K     | VMS_TOPUP_200K     |
+| MobiFone          | 500,000        | TOPUP_VMS_500K     | VMS_TOPUP_500K     |
+| VinaPhone         | 10,000         | TOPUP_GPC_10K      | GPC_TOPUP_10K      |
+| VinaPhone         | 20,000         | TOPUP_GPC_20K      | GPC_TOPUP_20K      |
+| VinaPhone         | 50,000         | TOPUP_GPC_50K      | GPC_TOPUP_50K      |
+| VinaPhone         | 100,000        | TOPUP_GPC_100K     | GPC_TOPUP_100K     |
+| VinaPhone         | 200,000        | TOPUP_GPC_200K     | GPC_TOPUP_200K     |
+| VinaPhone         | 500,000        | TOPUP_GPC_500K     | GPC_TOPUP_500K     |
++-------------------+----------------+--------------------+--------------------+
+
+
+================================================================================
+9. BẢNG MÃ TRẠNG THÁI ĐƠN HÀNG & MÃ LỖI CHUẨN HÓA
+================================================================================
+
+9.1. Trạng thái đơn hàng (status):
+- pending:        Đã nhận đơn và giữ hạn mức, worker đang chuẩn bị bắn lệnh.
+- processing:     Đang gửi giao dịch sang nhà mạng viễn thông.
+- success:        Nạp tiền thành công, đã khấu trừ công nợ chính thức.
+- failed:         Nạp tiền thất bại, hạn mức đã được hoàn lại an toàn.
+- manual_review:  Treo giao dịch nhà mạng, hệ thống bảo vệ giữ nguyên công nợ.
+
+9.2. Bảng mã lỗi HTTP và Error Code:
++-------------+--------------------------+-------------------------------------+
+| HTTP Status | Error Code               | Nguyên nhân & Giải pháp             |
++-------------+--------------------------+-------------------------------------+
+| 400         | MISSING_HEADERS          | Thiếu 1 trong 4 headers bắt buộc    |
+| 400         | MISSING_IDEMPOTENCY_KEY  | Thiếu header Idempotency-Key        |
+| 400         | VALIDATION_FAILED        | Dữ liệu đầu vào sai (SĐT không đúng)|
+| 401         | INVALID_SIGNATURE        | Chữ ký HMAC SHA-256 không khớp      |
+| 401         | REQUEST_EXPIRED          | Timestamp lệch quá +/- 300 giây     |
+| 401         | REPLAY_DETECTED          | Nonce bị dùng lại trong 10 phút qua |
+| 401         | KEY_REVOKED              | API Key bị khóa hoặc hết hạn        |
+| 403         | IP_NOT_ALLOWED           | IP gọi không nằm trong IP Whitelist |
+| 403         | UNAUTHORIZED_SERVICE     | Đối tác chưa được mở dịch vụ này    |
+| 404         | PRODUCT_NOT_FOUND        | Mã product_code không tồn tại       |
+| 404         | ORDER_NOT_FOUND          | Không tìm thấy đơn hàng tương ứng   |
+| 409         | DUPLICATE_ORDER          | partner_order_id bị trùng lặp       |
+| 409         | IDEMPOTENCY_CONFLICT     | Cùng Idempotency-Key nhưng đổi body |
+| 422         | INSUFFICIENT_CREDIT      | Hạn mức khả dụng không đủ           |
+| 500         | INTERNAL_SERVER_ERROR    | Lỗi hệ thống nội bộ                 |
++-------------+--------------------------+-------------------------------------+
+
+
+================================================================================
+10. QUY TRÌNH 4 BƯỚC TEST SANDBOX & NGHIỆM THU GO-LIVE
+================================================================================
+Bước 1: Kiểm tra kết nối mạng (Ping)
+  - Gửi request HEAD hoặc GET tới https://sandboxtv9.online/api/b2b/v1
+  - Đảm bảo nhận về HTTP 200 OK.
+
+Bước 2: Kiểm tra thuật toán chữ ký HMAC-SHA256
+  - So khớp với Test Vector tham chiếu tại Mục 3 để đảm bảo chữ ký sinh ra chính xác.
+  - Gọi API GET /api/b2b/v1/services và GET /api/b2b/v1/credit thành công.
+
+Bước 3: Thực hiện 3 kịch bản kiểm thử bắt buộc trên Sandbox:
+  - Kịch bản 1 (Tạo đơn thành công): Nạp thẻ 10.000đ Viettel/Mobi/Vina, nhận đơn 
+    trạng thái success và Webhook bắn về.
+  - Kịch bản 2 (Test Idempotency & Retry): Bắn 2 lần cùng một đơn với cùng 
+    Idempotency-Key, kiểm tra hệ thống chỉ trừ tiền 1 lần duy nhất.
+  - Kịch bản 3 (Test Hạn mức & Thất bại): Tạo đơn vượt quá hạn mức hoặc nạp vào số 
+    điện thoại test thất bại để kiểm tra cơ chế nhả hạn mức an toàn.
+
+Bước 4: Nghiệm thu kỹ thuật & Bàn giao Production
+  - Sau khi hoàn thành 3 kịch bản trên Sandbox, 2 bên ký biên bản nghiệm thu kỹ thuật.
+  - TV9 cấp bộ Key và mở dải IP trên môi trường Production (https://api.tv9tech.vn).
+================================================================================

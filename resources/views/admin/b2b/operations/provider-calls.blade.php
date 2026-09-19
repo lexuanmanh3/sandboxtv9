@@ -109,7 +109,15 @@
                   <span class="account-status-pill is-no">{{ $log->trang_thai }}</span>
                 @endif
               </td>
-              <td style="text-align: right;">
+              <td style="text-align: right; white-space: nowrap;">
+                @if(in_array($log->trang_thai, ['PENDING', 'UNKNOWN_OR_PENDING', 'PROCESSING']) || ($log->donHang && in_array($log->donHang->trang_thai_don_hang, ['PROVIDER_PENDING', 'MANUAL_REVIEW'])))
+                  <form action="{{ route('admin.b2b.operations.provider-calls.recheck', $log->id) }}" method="POST" style="display: inline-block; margin-right: 4px;" onsubmit="return confirm('Bạn có chắc chắn muốn tra cứu lại trạng thái đơn này từ Nhà cung cấp?');">
+                    @csrf
+                    <button class="account-btn account-btn--primary account-btn--sm" type="submit" style="min-height: 28px; padding: 4px 10px; font-size: 12px; background: #0284c7;">
+                      Tra cứu lại
+                    </button>
+                  </form>
+                @endif
                 <button class="account-btn account-btn--muted account-btn--sm" type="button" style="min-height: 28px; padding: 4px 10px; font-size: 12px;" onclick="viewLogDetail({{ $log->id }})">
                   Xem Log
                 </button>
