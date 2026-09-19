@@ -148,23 +148,43 @@ class OrderController extends Controller
             ]);
         }
 
-        // Lọc theo khoảng thời gian nếu có
+        // Xác thực và lọc theo khoảng thời gian nếu có
         if ($request->filled('from_date')) {
-            $query->where('created_at', '>=', $request->query('from_date'));
+            $fromDate = $request->query('from_date');
+            if (!strtotime($fromDate)) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'INVALID_DATE_FORMAT',
+                    'message' => "Tham số 'from_date' không đúng định dạng ngày tháng hợp lệ.",
+                ], Response::HTTP_BAD_REQUEST);
+            }
+            $query->where('created_at', '>=', $fromDate);
         }
+
         if ($request->filled('to_date')) {
-            $query->where('created_at', '<=', $request->query('to_date'));
+            $toDate = $request->query('to_date');
+            if (!strtotime($toDate)) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'INVALID_DATE_FORMAT',
+                    'message' => "Tham số 'to_date' không đúng định dạng ngày tháng hợp lệ.",
+                ], Response::HTTP_BAD_REQUEST);
+            }
+            $query->where('created_at', '<=', $toDate);
         }
+
         if ($request->filled('status')) {
-            $status = strtoupper((string) $request->query('status'));
-            $mappedStatus = match ($status) {
-                'PENDING' => 'QUEUED',
-                'PROCESSING' => 'DANG_XU_LY',
-                'SUCCESS' => 'HOAN_THANH',
-                'FAILED' => 'THAT_BAI',
-                default => $status,
-            };
-            $query->where('trang_thai_don_hang', $mappedStatus);
+            $statusInput = strtolower(trim((string) $request->query('status')));
+            if (!in_array($statusInput, \App\Services\DaiLyApi\B2bStatusMapper::ALL_PUBLIC_STATUSES, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'INVALID_STATUS_FILTER',
+                    'message' => "Trạng thái lọc '{$statusInput}' không hợp lệ. Các trạng thái hợp lệ: " . implode(', ', \App\Services\DaiLyApi\B2bStatusMapper::ALL_PUBLIC_STATUSES),
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
+            $internalStatuses = \App\Services\DaiLyApi\B2bStatusMapper::toInternalFilter($statusInput);
+            $query->whereIn('trang_thai_don_hang', $internalStatuses);
         }
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 20)));
@@ -186,18 +206,10 @@ class OrderController extends Controller
      */
     protected function formatOrder(DonHang $donHang): array
     {
-        // Ánh xạ trạng thái nội bộ sang trạng thái công khai chuẩn
-        $publicStatus = match ($donHang->trang_thai_don_hang) {
-            'QUEUED', 'CHO_XU_LY' => 'pending',
-            'DANG_XU_LY', 'PROCESSING' => 'processing',
-            'HOAN_THANH', 'SUCCESS' => 'success',
-            'THAT_BAI', 'FAILED' => 'failed',
-            'MANUAL_REVIEW' => 'manual_review',
-            default => strtolower($donHang->trang_thai_don_hang),
-        };
+        $publicStatus = \App\Services\DaiLyApi\B2bStatusMapper::toPublic($donHang->trang_thai_don_hang);
 
-        // completed_at chỉ điền khi đơn có kết quả cuối cùng (thành công hoặc thất bại)
-        $completedAt = in_array($publicStatus, ['success', 'failed'], true)
+        // completed_at chỉ có khi đơn đã có kết quả cuối cùng (success hoặc failed)
+        $completedAt = \App\Services\DaiLyApi\B2bStatusMapper::isFinalPublicStatus($publicStatus)
             ? ($donHang->hoan_thanh_luc?->toIso8601String() ?: $donHang->that_bai_luc?->toIso8601String() ?: $donHang->updated_at?->toIso8601String())
             : null;
 
@@ -208,8 +220,8 @@ class OrderController extends Controller
             'account' => $donHang->tai_khoan_nhan,
             'product_code' => $donHang->ma_san_pham_snapshot,
             'product_name' => $donHang->ten_san_pham_snapshot,
-            'amount' => (float) $donHang->menh_gia,
-            'price' => (float) $donHang->gia_ban,
+            'amount' => (int) round((float) $donHang->menh_gia),
+            'price' => (int) round((float) $donHang->gia_ban),
             'status' => $publicStatus,
             'payment_status' => $donHang->trang_thai_thanh_toan,
             'created_at' => $donHang->created_at?->toIso8601String(),

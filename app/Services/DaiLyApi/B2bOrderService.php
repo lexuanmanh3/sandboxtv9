@@ -18,7 +18,8 @@ class B2bOrderService
 {
     public function __construct(
         protected KiemTraQuyenDaiLyApiService $quyenService,
-        protected B2bCreditService $creditService
+        protected B2bCreditService $creditService,
+        protected B2bPricingService $pricingService
     ) {}
 
     /**
@@ -113,26 +114,11 @@ class B2bOrderService
             throw new DomainException($kiemTraQuyen['ly_do'] ?: 'Đại lý không được phép sử dụng sản phẩm này.', 403);
         }
 
-        // 8. Tính giá bán đại lý (Bảng giá riêng hoặc mặc định hệ thống)
-        $bangGia = BangGiaDaiLy::where('dai_ly_api_id', $daiLy->id)
-            ->where('san_pham_id', $sanPham->id)
-            ->whereIn('trang_thai', ['hoat_dong', 'ACTIVE'])
-            ->first();
-
-        $menhGia = (float) $sanPham->menh_gia;
-        if ($bangGia) {
-            if ($bangGia->loai_chiet_khau === 'FIXED_PRICE' && (float) $bangGia->gia_ban_ap_dung > 0) {
-                $giaBan = (float) $bangGia->gia_ban_ap_dung;
-                $chietKhau = max(0.0, $menhGia - $giaBan);
-            } else {
-                $phanTram = (float) $bangGia->gia_tri_chiet_khau;
-                $chietKhau = round($menhGia * ($phanTram / 100), 2);
-                $giaBan = $menhGia - $chietKhau;
-            }
-        } else {
-            $giaBan = (float) ($sanPham->gia_ban ?: $menhGia);
-            $chietKhau = (float) ($sanPham->chiet_khau ?: ($menhGia - $giaBan));
-        }
+        // 8. Tính giá bán đại lý qua B2bPricingService thống nhất
+        $priceInfo = $this->pricingService->tinhGia($daiLy, $sanPham);
+        $menhGia = $priceInfo['face_value'];
+        $giaBan = $priceInfo['price'];
+        $chietKhau = $priceInfo['discount'];
 
         // 9. Thực hiện lưu Transaction nguyên tử: DonHang + GiuHanMuc + Outbox + Idempotency
         try {
@@ -250,6 +236,25 @@ class B2bOrderService
                 }
 
                 if (str_contains($errorMsg, 'uq_don_hang_partner_order')) {
+                    // Kiểm tra xem đơn hàng đã tồn tại có cùng Idempotency-Key không
+                    $existingOrder = DonHang::where('dai_ly_api_id', $daiLy->id)
+                        ->where('ma_don_doi_tac', $partnerOrderId)
+                        ->first();
+
+                    if ($existingOrder && $existingOrder->idempotency_key === $idempotencyKey) {
+                        $retryRecord = B2bIdempotencyRecord::where('dai_ly_api_id', $daiLy->id)
+                            ->where('idempotency_key', $idempotencyKey)
+                            ->first();
+
+                        if ($retryRecord && $retryRecord->request_hash === $businessFingerprint && $retryRecord->response_json) {
+                            return [
+                                'http_code' => $retryRecord->http_status ?: 202,
+                                'data' => json_decode($retryRecord->response_json, true),
+                                'is_replay' => true,
+                            ];
+                        }
+                    }
+
                     throw new DomainException("Mã đơn đối tác '{$partnerOrderId}' đã tồn tại trong hệ thống.", 409);
                 }
             }

@@ -95,11 +95,79 @@ class RecoverB2bOrderOutboxCommand extends Command
                 continue;
             }
 
-            // Nếu đơn vẫn ở trạng thái QUEUED -> dispatch job
+            // Kiểm tra bằng chứng các lần gọi NCC cho đơn này
+            $latestCall = $donHang->lanGoiNhaCungCap()
+                ->where('loai_yeu_cau', 'CHARGING')
+                ->orderByDesc('id')
+                ->first();
+
+            // Tình huống 1: Đơn đang QUEUED -> dispatch job
             if ($donHang->trang_thai_don_hang === 'QUEUED') {
                 ProcessMobileTopupJob::dispatch($donHang->id);
                 $recovered++;
                 $this->info("Đã dispatch lại ProcessMobileTopupJob cho đơn #{$donHang->ma_don_hang} (Outbox ID #{$record->id})");
+                continue;
+            }
+
+            // Tình huống 2: Đơn đang PROCESSING
+            if (in_array($donHang->trang_thai_don_hang, ['PROCESSING', 'DANG_XU_LY'], true)) {
+                // Điểm chết 1: Worker chết trước khi tạo lần gọi NCC (chưa có record lần gọi nào)
+                if (!$latestCall) {
+                    // Nếu thời gian xử lý đã quá 2 phút mà không có lần gọi nào, cho phép dispatch lại an toàn
+                    $batDau = $donHang->bat_dau_xu_ly_luc ?: $donHang->updated_at ?: $donHang->created_at;
+                    if ($batDau && $batDau->diffInMinutes(now()) >= 2) {
+                        ProcessMobileTopupJob::dispatch($donHang->id);
+                        $recovered++;
+                        $this->info("Đã dispatch lại ProcessMobileTopupJob (chưa từng gọi NCC) cho đơn #{$donHang->ma_don_hang} (Outbox ID #{$record->id})");
+                    }
+                    continue;
+                }
+
+                // Điểm chết 2 & 3: Đã tạo lần gọi NCC hoặc đang gửi dở dang (kết quả chưa rõ ràng)
+                if (in_array($latestCall->trang_thai, ['PROCESSING', 'UNKNOWN_OR_PENDING'], true) ||
+                    in_array($latestCall->ket_qua_xac_dinh, ['UNKNOWN_OR_PENDING', 'PENDING'], true)) {
+                    // TUYỆT ĐỐI KHÔNG TẠO LỆNH NẠP MỚI / MÃ THAM CHIẾU MỚI
+                    // Chuyển sang tra cứu trạng thái bằng chính partner_ref_id gốc
+                    $donHang->update(['trang_thai_don_hang' => \App\Enums\TrangThaiDonHang::PROVIDER_PENDING->value]);
+                    \App\Jobs\CheckMobileTopupStatusJob::dispatch($latestCall->id);
+                    $recovered++;
+                    $this->info("Đã chuyển đơn #{$donHang->ma_don_hang} sang PROVIDER_PENDING và dispatch CheckMobileTopupStatusJob (Call ID #{$latestCall->id})");
+                    continue;
+                }
+
+                // Điểm chết 4: NCC đã trả kết quả cuối nhưng worker chết trước khi chốt đơn
+                if ($latestCall->ket_qua_xac_dinh === 'SUCCESS') {
+                    app(\App\Services\DaiLyApi\B2bCreditService::class)->chotCongNoThanhCong($donHang);
+                    $donHang->update([
+                        'trang_thai_don_hang' => 'SUCCESS',
+                        'hoan_thanh_luc' => now(),
+                    ]);
+                    $record->update(['status' => 'PROCESSED', 'processed_at' => now()]);
+                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($donHang, 'order.completed');
+                    $recovered++;
+                    $this->info("Đã hoàn tất chốt thành công đơn #{$donHang->ma_don_hang} dựa trên kết quả NCC.");
+                    continue;
+                }
+
+                if ($latestCall->ket_qua_xac_dinh === 'DEFINITIVE_FAILURE') {
+                    app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($donHang, 'NCC thất bại dứt khoát');
+                    $donHang->update([
+                        'trang_thai_don_hang' => 'FAILED',
+                        'that_bai_luc' => now(),
+                    ]);
+                    $record->update(['status' => 'PROCESSED', 'processed_at' => now()]);
+                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($donHang, 'order.completed');
+                    $recovered++;
+                    $this->info("Đã giải phóng khoản giữ và chuyển thất bại đơn #{$donHang->ma_don_hang} dựa trên kết quả NCC.");
+                    continue;
+                }
+            }
+
+            // Tình huống 3: Đơn ở PROVIDER_PENDING hoặc MANUAL_REVIEW
+            if (in_array($donHang->trang_thai_don_hang, ['PROVIDER_PENDING', 'MANUAL_REVIEW'], true) && $latestCall) {
+                \App\Jobs\CheckMobileTopupStatusJob::dispatch($latestCall->id);
+                $recovered++;
+                $this->info("Đã kích hoạt CheckMobileTopupStatusJob cho đơn #{$donHang->ma_don_hang} (Call ID #{$latestCall->id})");
             }
         }
 

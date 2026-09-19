@@ -42,14 +42,19 @@ class ReconcilePendingTopupCallsCommand extends Command
 
         $this->info("Bắt đầu quét tra cứu nền (Max hours: {$maxHours}h, Min interval: {$minInterval}s, Limit: {$limit})...");
 
-        // 1. Quét các lần gọi NCC cho đơn hàng chưa hoàn tất (PROVIDER_PENDING hoặc MANUAL_REVIEW)
+        // 1. Quét các lần gọi NCC cho đơn hàng chưa hoàn tất (PROVIDER_PENDING, MANUAL_REVIEW hoặc PROCESSING dở dang)
         $pendingCalls = LanGoiNhaCungCap::query()
             ->with(['donHang', 'ketNoi'])
-            ->whereHas('donHang', function ($q) {
+            ->whereHas('donHang', function ($q) use ($minCheckTime) {
                 $q->whereIn('trang_thai_don_hang', [
                     TrangThaiDonHang::PROVIDER_PENDING->value,
                     TrangThaiDonHang::MANUAL_REVIEW->value,
-                ]);
+                ])->orWhere(function ($sub) use ($minCheckTime) {
+                    $sub->whereIn('trang_thai_don_hang', [
+                        TrangThaiDonHang::PROCESSING->value,
+                        'DANG_XU_LY',
+                    ])->where('created_at', '<=', $minCheckTime);
+                });
             })
             ->where('loai_yeu_cau', 'CHARGING')
             ->whereNotIn('ket_qua_xac_dinh', [

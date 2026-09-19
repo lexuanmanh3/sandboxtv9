@@ -129,7 +129,11 @@ class B2bWebhookService
             'User-Agent' => 'tv9tech-B2B-Webhook/1.0',
         ];
 
-        $outbox->update(['trang_thai' => 'PROCESSING']);
+        // Đặt lease khóa 2 phút chống worker khác tranh chấp
+        $outbox->update([
+            'trang_thai' => 'PROCESSING',
+            'khoa_den' => now()->addMinutes(2),
+        ]);
 
         $startTime = microtime(true);
         $httpStatus = null;
@@ -158,7 +162,7 @@ class B2bWebhookService
             $errorMessage = $e->getMessage();
         }
 
-        // 3. Ghi log lịch sử gửi
+        // 3. Ghi log lịch sử gửi (không lộ secret trong headers)
         LichSuGuiWebhook::create([
             'webhook_outbox_id' => $outbox->id,
             'url' => $url,
@@ -177,10 +181,11 @@ class B2bWebhookService
             $outbox->update([
                 'trang_thai' => 'SUCCESS',
                 'so_lan_thu' => $newAttempts,
+                'khoa_den' => null,
             ]);
             return true;
         } else {
-            // Backoff: 30s, 2m, 10m, 30m, 2h
+            // Backoff đồng bộ: lần 1: 30s, lần 2: 120s, lần 3: 600s, lần 4: 1800s, lần 5: 7200s
             $backoffDelays = [30, 120, 600, 1800, 7200];
             $nextDelay = $backoffDelays[min($newAttempts - 1, count($backoffDelays) - 1)];
 
@@ -191,6 +196,7 @@ class B2bWebhookService
                 'trang_thai' => $status,
                 'so_lan_thu' => $newAttempts,
                 'lan_thu_tiep_theo' => $nextRun,
+                'khoa_den' => null,
             ]);
 
             return false;

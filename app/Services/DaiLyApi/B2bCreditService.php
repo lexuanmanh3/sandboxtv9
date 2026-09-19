@@ -98,13 +98,31 @@ class B2bCreditService
         }
 
         DB::transaction(function () use ($donHang) {
+            // 1. Kiểm tra xem bút toán chốt công nợ đã tồn tại chưa (Idempotent)
+            $maThamChieu = 'TX-ORD-' . $donHang->id;
+            $existingLedger = SoPhatSinhCongNo::where('dai_ly_api_id', $donHang->dai_ly_api_id)
+                ->where('ma_tham_chieu', $maThamChieu)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingLedger) {
+                return;
+            }
+
             $hold = KhoanGiuHanMuc::where('don_hang_id', $donHang->id)
                 ->lockForUpdate()
                 ->first();
 
-            // Nếu đã commit trước đó (idempotent), bỏ qua
+            // Nếu đã commit trước đó hoặc đã release thì không tự ý commit đè
             if ($hold && $hold->trang_thai === 'COMMITTED') {
                 return;
+            }
+
+            if ($hold && $hold->trang_thai === 'RELEASED') {
+                \Illuminate\Support\Facades\Log::warning("B2bCreditService: Khoản giữ đơn #{$donHang->id} đã RELEASED trước đó nhưng nhận tín hiệu thành công muộn. Cần kiểm tra đối soát.", [
+                    'don_hang_id' => $donHang->id,
+                    'dai_ly_api_id' => $donHang->dai_ly_api_id,
+                ]);
             }
 
             $cauHinh = CauHinhApiDaiLy::where('dai_ly_api_id', $donHang->dai_ly_api_id)
@@ -136,21 +154,17 @@ class B2bCreditService
             }
 
             // Ghi sổ cái phát sinh công nợ (Immutable ledger)
-            $maThamChieu = 'TX-ORD-' . $donHang->id;
-            SoPhatSinhCongNo::firstOrCreate(
-                [
-                    'dai_ly_api_id' => $donHang->dai_ly_api_id,
-                    'ma_tham_chieu' => $maThamChieu,
-                ],
-                [
-                    'don_hang_id' => $donHang->id,
-                    'loai_phat_sinh' => 'TANG_CONG_NO_DON_HANG',
-                    'so_tien' => $soTien,
-                    'so_du_truoc' => $soDuTruoc,
-                    'so_du_sau' => $soDuSau,
-                    'ghi_chu' => "Ghi nhận công nợ đơn hàng #{$donHang->ma_don_hang} (Đối tác ref: {$donHang->ma_don_doi_tac})",
-                ]
-            );
+            SoPhatSinhCongNo::create([
+                'dai_ly_api_id' => $donHang->dai_ly_api_id,
+                'ma_tham_chieu' => $maThamChieu,
+                'don_hang_id' => $donHang->id,
+                'loai_phat_sinh' => 'TANG_CONG_NO_DON_HANG',
+                'so_tien' => $soTien,
+                'so_du_truoc' => $soDuTruoc,
+                'so_du_sau' => $soDuSau,
+                'ghi_chu' => "Ghi nhận công nợ đơn hàng #{$donHang->ma_don_hang} (Đối tác ref: {$donHang->ma_don_doi_tac})",
+                'created_at' => now(),
+            ]);
         });
     }
 
@@ -168,6 +182,7 @@ class B2bCreditService
                 ->lockForUpdate()
                 ->first();
 
+            // Tuyệt đối không giải phóng khoản giữ đã COMMITTED
             if (!$hold || $hold->trang_thai !== 'HOLDING') {
                 return;
             }
@@ -182,7 +197,7 @@ class B2bCreditService
 
     /**
      * Hoàn tiền / giảm công nợ cho đơn B2B đã thành công trước đó.
-     * Tuyệt đối không cộng vào ví B2C.
+     * Tuyệt đối không cộng vào ví B2C. Chống lặp và kiểm tra điều kiện nghiệp vụ chặt chẽ.
      */
     public function hoanTienGiamCongNo(DonHang $donHang, string $lyDo, ?int $nguoiThaoTacId = null): void
     {
@@ -191,33 +206,50 @@ class B2bCreditService
         }
 
         DB::transaction(function () use ($donHang, $lyDo, $nguoiThaoTacId) {
+            $maThamChieu = 'TX-REF-' . $donHang->id;
+
+            // 1. Kiểm tra xem bút toán hoàn nợ đã tồn tại chưa (Idempotency check TRƯỚC KHI trừ tiền)
+            $existingRefund = SoPhatSinhCongNo::where('dai_ly_api_id', $donHang->dai_ly_api_id)
+                ->where('ma_tham_chieu', $maThamChieu)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingRefund) {
+                return; // Đã hoàn nợ trước đó, không thực hiện lại
+            }
+
+            // 2. Kiểm tra xem đơn hàng đã từng được ghi tăng nợ hay chưa
+            $originalLedger = SoPhatSinhCongNo::where('dai_ly_api_id', $donHang->dai_ly_api_id)
+                ->where('ma_tham_chieu', 'TX-ORD-' . $donHang->id)
+                ->first();
+
+            if (!$originalLedger) {
+                throw new DomainException("Không thể hoàn công nợ cho đơn hàng #{$donHang->id} vì đơn này chưa từng được ghi nhận nợ.", 422);
+            }
+
             $cauHinh = CauHinhApiDaiLy::where('dai_ly_api_id', $donHang->dai_ly_api_id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $soTien = (float) $donHang->gia_ban;
             $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
-            $soDuSau = max(0.0, $soDuTruoc - $soTien);
+            $soDuSau = $soDuTruoc - $soTien;
 
             $cauHinh->cong_no_hien_tai = $soDuSau;
             $cauHinh->save();
 
-            $maThamChieu = 'TX-REF-' . $donHang->id;
-            SoPhatSinhCongNo::firstOrCreate(
-                [
-                    'dai_ly_api_id' => $donHang->dai_ly_api_id,
-                    'ma_tham_chieu' => $maThamChieu,
-                ],
-                [
-                    'don_hang_id' => $donHang->id,
-                    'loai_phat_sinh' => 'GIAM_CONG_NO_HOAN_TIEN',
-                    'so_tien' => $soTien,
-                    'so_du_truoc' => $soDuTruoc,
-                    'so_du_sau' => $soDuSau,
-                    'ghi_chu' => "Hoàn tiền giảm công nợ đơn hàng #{$donHang->ma_don_hang}: {$lyDo}",
-                    'nguoi_tao_id' => $nguoiThaoTacId,
-                ]
-            );
+            SoPhatSinhCongNo::create([
+                'dai_ly_api_id' => $donHang->dai_ly_api_id,
+                'ma_tham_chieu' => $maThamChieu,
+                'don_hang_id' => $donHang->id,
+                'loai_phat_sinh' => 'GIAM_CONG_NO_HOAN_TIEN',
+                'so_tien' => $soTien,
+                'so_du_truoc' => $soDuTruoc,
+                'so_du_sau' => $soDuSau,
+                'ghi_chu' => "Hoàn tiền giảm công nợ đơn hàng #{$donHang->ma_don_hang}: {$lyDo}",
+                'nguoi_tao_id' => $nguoiThaoTacId,
+                'created_at' => now(),
+            ]);
         });
     }
 

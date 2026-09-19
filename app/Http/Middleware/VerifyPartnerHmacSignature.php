@@ -29,9 +29,9 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 2. Kiểm tra Timestamp trong cửa sổ cho phép (+- 300s)
+        // 2. Kiểm tra Timestamp: bắt buộc là số nguyên giây và trong cửa sổ cho phép (+- 300s)
         $now = time();
-        if (!is_numeric($timestamp) || abs($now - (int) $timestamp) > self::TIMESTAMP_WINDOW_SECONDS) {
+        if (!ctype_digit((string) $timestamp) || abs($now - (int) $timestamp) > self::TIMESTAMP_WINDOW_SECONDS) {
             return response()->json([
                 'success' => false,
                 'error_code' => 'REQUEST_EXPIRED',
@@ -40,7 +40,16 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 3. Tra cứu cấu hình đại lý theo Client ID
+        // 3. Kiểm tra Nonce: tối thiểu 16 ký tự, chỉ chứa ký tự chữ/số/gạch nối
+        if (!preg_match('/^[A-Za-z0-9_\-]{16,64}$/', (string) $nonce)) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'INVALID_NONCE_FORMAT',
+                'message' => 'Header X-Nonce không hợp lệ (yêu cầu từ 16 đến 64 ký tự chữ, số hoặc gạch dưới/ngang).',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // 4. Tra cứu cấu hình đại lý theo Client ID
         $cauHinh = CauHinhApiDaiLy::with('daiLyApi')
             ->where('client_id', $clientId)
             ->first();
@@ -55,7 +64,7 @@ class VerifyPartnerHmacSignature
 
         $daiLy = $cauHinh->daiLyApi;
 
-        // 4. Kiểm tra trạng thái hoạt động & Key thu hồi
+        // 5. Kiểm tra trạng thái hoạt động & Key thu hồi
         if ($daiLy->trang_thai !== 'hoat_dong') {
             return response()->json([
                 'success' => false,
@@ -73,36 +82,42 @@ class VerifyPartnerHmacSignature
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // 5. Kiểm tra Nonce nguyên tử chống tấn công phát lại (Replay Attack)
-        $nonceCacheKey = "b2b_nonce:{$daiLy->id}:{$nonce}";
-        if (!Cache::add($nonceCacheKey, 1, self::NONCE_TTL_SECONDS)) {
-            return response()->json([
-                'success' => false,
-                'error_code' => 'REPLAY_DETECTED',
-                'message' => 'Nonce đã được sử dụng trước đó (Replay attack detected).',
-            ], Response::HTTP_UNAUTHORIZED);
-        }
-
         // 6. Xử lý Idempotency-Key
         $method = strtoupper($request->method());
         $idempotencyKey = $request->header('Idempotency-Key')
             ?: $request->header('X-Idempotency-Key')
             ?: '';
 
-        // Với các method thay đổi trạng thái (POST, PUT, DELETE), bắt buộc phải có Idempotency-Key
-        if (in_array($method, ['POST', 'PUT', 'DELETE'], true) && empty($idempotencyKey)) {
-            return response()->json([
-                'success' => false,
-                'error_code' => 'MISSING_IDEMPOTENCY_KEY',
-                'message' => 'Header Idempotency-Key là bắt buộc để đảm bảo an toàn giao dịch.',
-            ], Response::HTTP_BAD_REQUEST);
+        // Với các method thay đổi trạng thái (POST, PUT, DELETE), bắt buộc phải có Idempotency-Key dạng UUID
+        if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+            if (empty($idempotencyKey)) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'MISSING_IDEMPOTENCY_KEY',
+                    'message' => 'Header Idempotency-Key là bắt buộc để đảm bảo an toàn giao dịch.',
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
+            if (!\Illuminate\Support\Str::isUuid($idempotencyKey)) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'INVALID_IDEMPOTENCY_KEY',
+                    'message' => 'Header Idempotency-Key bắt buộc phải là định dạng UUID v4.',
+                ], Response::HTTP_BAD_REQUEST);
+            }
         }
 
         // 7. Chuẩn hóa chuỗi ký Canonical String duy nhất:
         // METHOD\nCANONICAL_PATH_WITH_QUERY\nTIMESTAMP\nNONCE\nIDEMPOTENCY_KEY\nBODY_SHA256
         $path = '/' . ltrim($request->path(), '/');
-        $queryString = $request->getQueryString();
-        $canonicalUri = $queryString ? "{$path}?{$queryString}" : $path;
+        $queryParams = $request->query();
+        if (!empty($queryParams)) {
+            ksort($queryParams);
+            $canonicalQuery = http_build_query($queryParams);
+            $canonicalUri = "{$path}?{$canonicalQuery}";
+        } else {
+            $canonicalUri = $path;
+        }
 
         $rawBody = in_array($method, ['GET', 'HEAD']) ? '' : (string) $request->getContent();
         $bodyHash = hash('sha256', $rawBody);
@@ -125,11 +140,22 @@ class VerifyPartnerHmacSignature
             }
         }
 
+        // XÁC MINH CHỮ KÝ TRƯỚC: Nếu sai chữ ký, từ chối ngay và TUYỆT ĐỐI không claim nonce!
         if (!$isSignatureValid) {
             return response()->json([
                 'success' => false,
                 'error_code' => 'INVALID_SIGNATURE',
                 'message' => 'Chữ ký HMAC không khớp hoặc không hợp lệ.',
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // 9. CHỈ CLAIM NONCE SAU KHI CHỮ KÝ ĐÃ HỢP LỆ (Bảo vệ chống kẻ xấu chiếm nonce của đại lý)
+        $nonceCacheKey = "b2b_nonce:{$daiLy->id}:{$nonce}";
+        if (!Cache::add($nonceCacheKey, 1, self::NONCE_TTL_SECONDS)) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'REPLAY_DETECTED',
+                'message' => 'Nonce đã được sử dụng trước đó (Replay attack detected).',
             ], Response::HTTP_UNAUTHORIZED);
         }
 

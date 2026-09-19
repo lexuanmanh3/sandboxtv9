@@ -20,35 +20,46 @@ class VerifyPartnerIpAllowlist
             }
         }
 
-        if ($cauHinh && !empty($cauHinh->danh_sach_ip_ket_noi)) {
-            $allowedIps = array_filter(array_map('trim', preg_split('/[\r\n,;]+/', (string) $cauHinh->danh_sach_ip_ket_noi)));
+        $allowedIps = ($cauHinh && !empty($cauHinh->danh_sach_ip_ket_noi))
+            ? array_filter(array_map('trim', preg_split('/[\r\n,;]+/', (string) $cauHinh->danh_sach_ip_ket_noi)))
+            : [];
 
-            if (!empty($allowedIps)) {
-                $clientIp = $request->ip();
-
-                // Kiểm tra xem IP client có nằm trong danh sách được phép không
-                $matched = false;
-                foreach ($allowedIps as $allowedIp) {
-                    if ($clientIp === $allowedIp) {
-                        $matched = true;
-                        break;
-                    }
-
-                    // Hỗ trợ dải CIDR (nếu có dấu /)
-                    if (str_contains($allowedIp, '/') && $this->ipInCidr($clientIp, $allowedIp)) {
-                        $matched = true;
-                        break;
-                    }
-                }
-
-                if (!$matched) {
-                    return response()->json([
-                        'success' => false,
-                        'error_code' => 'IP_NOT_ALLOWED',
-                        'message' => "Địa chỉ IP ({$clientIp}) của bạn không nằm trong danh sách IP được phép kết nối.",
-                    ], Response::HTTP_FORBIDDEN);
-                }
+        // Chính sách an toàn: Trong môi trường Production, danh sách IP rỗng tuyệt đối không được mở cửa tự do
+        if (empty($allowedIps)) {
+            if (app()->environment('production')) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'IP_ALLOWLIST_NOT_CONFIGURED',
+                    'message' => 'Đại lý chưa được cấu hình IP Whitelist. Yêu cầu liên hệ TV9Tech để đăng ký IP kết nối.',
+                ], Response::HTTP_FORBIDDEN);
             }
+
+            return $next($request);
+        }
+
+        $clientIp = $request->ip();
+
+        // Kiểm tra xem IP client có nằm trong danh sách được phép không
+        $matched = false;
+        foreach ($allowedIps as $allowedIp) {
+            if ($clientIp === $allowedIp) {
+                $matched = true;
+                break;
+            }
+
+            // Hỗ trợ dải CIDR (nếu có dấu /)
+            if (str_contains($allowedIp, '/') && $this->ipInCidr($clientIp, $allowedIp)) {
+                $matched = true;
+                break;
+            }
+        }
+
+        if (!$matched) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'IP_NOT_ALLOWED',
+                'message' => "Địa chỉ IP ({$clientIp}) của bạn không nằm trong danh sách IP được phép kết nối.",
+            ], Response::HTTP_FORBIDDEN);
         }
 
         return $next($request);

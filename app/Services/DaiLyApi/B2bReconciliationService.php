@@ -27,7 +27,10 @@ class B2bReconciliationService
             throw new DomainException('Từ ngày không được lớn hơn Đến ngày.');
         }
 
-        $maKy = 'DS-' . $daiLy->ma_dai_ly_api . '-' . $tu->format('Ym');
+        $isFullMonth = ($tu->copy()->startOfMonth()->toDateString() === $tu->toDateString() && $den->copy()->endOfMonth()->toDateString() === $den->toDateString());
+        $maKy = $isFullMonth
+            ? ('DS-' . $daiLy->ma_dai_ly_api . '-' . $tu->format('Ym'))
+            : ('DS-' . $daiLy->ma_dai_ly_api . '-' . $tu->format('Ymd') . '-' . $den->format('Ymd'));
 
         // Kiểm tra xem kỳ đã tồn tại chưa
         $existing = KyDoiSoat::where('dai_ly_api_id', $daiLy->id)
@@ -76,10 +79,26 @@ class B2bReconciliationService
             $tu = Carbon::parse($ky->tu_ngay)->startOfDay();
             $den = Carbon::parse($ky->den_ngay)->endOfDay();
 
-            // 1. Quét danh sách đơn hàng hoàn thành trong kỳ
-            $donHangs = DonHang::where('dai_ly_api_id', $ky->dai_ly_api_id)
+            // 1. Quét danh sách đơn hàng hoàn thành trong kỳ dựa trên Sổ phát sinh công nợ
+            // Điều này đảm bảo đơn hàng tạo cuối tháng trước nhưng thành công vào đầu tháng này
+            // sẽ được ghi nhận chính xác vào kỳ đối soát tương ứng theo thời điểm phát sinh nợ thực tế.
+            $ledgerEntries = SoPhatSinhCongNo::where('dai_ly_api_id', $ky->dai_ly_api_id)
+                ->where('loai_phat_sinh', 'TANG_CONG_NO_DON_HANG')
                 ->whereBetween('created_at', [$tu, $den])
+                ->get();
+
+            $orderIdsFromLedger = $ledgerEntries->pluck('don_hang_id')->filter()->all();
+
+            $donHangs = DonHang::where('dai_ly_api_id', $ky->dai_ly_api_id)
                 ->where('trang_thai_don_hang', 'SUCCESS')
+                ->where(function ($q) use ($tu, $den, $orderIdsFromLedger) {
+                    if (!empty($orderIdsFromLedger)) {
+                        $q->whereIn('id', $orderIdsFromLedger)
+                          ->orWhereBetween('created_at', [$tu, $den]);
+                    } else {
+                        $q->whereBetween('created_at', [$tu, $den]);
+                    }
+                })
                 ->get();
 
             // Cập nhật chi tiết kỳ
