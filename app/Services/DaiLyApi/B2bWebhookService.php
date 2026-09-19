@@ -7,13 +7,29 @@ use App\Models\DonHang;
 use App\Models\LichSuGuiWebhook;
 use App\Models\WebhookOutbox;
 use App\Services\Security\UrlSafetyValidator;
-use Exception;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class B2bWebhookService
 {
+    /**
+     * Số lần thử tối đa trước khi chuyển sang trạng thái cần xử lý thủ công.
+     * Phải khớp với số phần tử của BACKOFF_SECONDS + 1 để mọi khoảng chờ
+     * được khai báo đều thực sự được sử dụng.
+     */
+    public const MAX_ATTEMPTS = 6;
+
+    /**
+     * Khoảng chờ (giây) sau lần thử thứ 1..5.
+     * Lần thử thứ 6 thất bại -> MANUAL_REVIEW (không còn khoảng chờ nào).
+     */
+    public const BACKOFF_SECONDS = [30, 120, 600, 1800, 7200];
+
+    /** Thời hạn lease sở hữu khi gửi webhook (giây). */
+    public const LEASE_SECONDS = 120;
+
     /**
      * Tạo bản ghi outbox cho webhook khi đơn hàng cập nhật trạng thái.
      * Thường được gọi trong DB transaction sau khi đơn đổi trạng thái.
@@ -34,6 +50,10 @@ class B2bWebhookService
         // Sử dụng UUIDv5 tất định dựa trên don_hang_id và event_type để định danh sự kiện ổn định
         $eventId = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_OID, "b2b_webhook:{$donHang->id}:{$eventType}")->toString();
 
+        // Trạng thái công khai dùng CHUNG một bộ ánh xạ với API tra cứu.
+        // Không rò rỉ trạng thái nội bộ (PROVIDER_PENDING, REFUND_PENDING, ...) ra hợp đồng webhook.
+        $publicStatus = B2bStatusMapper::toPublic($donHang->trang_thai_don_hang);
+
         $payload = [
             'event_id' => $eventId,
             'event_type' => $eventType,
@@ -45,10 +65,11 @@ class B2bWebhookService
                 'account' => $donHang->tai_khoan_nhan,
                 'amount' => (float) $donHang->menh_gia,
                 'price' => (float) $donHang->gia_ban,
-                'status' => $donHang->trang_thai_don_hang,
-                'result_code' => $donHang->trang_thai_don_hang === 'SUCCESS' ? '00' : '99',
-                'completed_at' => $donHang->hoan_thanh_luc?->toIso8601String(),
-                'failed_at' => $donHang->that_bai_luc?->toIso8601String(),
+                'status' => $publicStatus,
+                'result_code' => B2bStatusMapper::resultCode($publicStatus),
+                'completed_at' => B2bStatusMapper::isFinalPublicStatus($publicStatus)
+                    ? ($donHang->hoan_thanh_luc?->toIso8601String() ?: $donHang->that_bai_luc?->toIso8601String())
+                    : null,
                 'updated_at' => now()->toIso8601String(),
             ],
         ];
@@ -66,7 +87,8 @@ class B2bWebhookService
             ]
         );
 
-        // Chỉ dispatch job gửi webhook sau khi transaction commit nếu outbox vừa được tạo mới
+        // Chỉ dispatch job gửi webhook sau khi transaction commit nếu outbox vừa được tạo mới.
+        // Khoảng trống giữa commit và dispatch được RetryB2bWebhooksCommand phủ (quét PENDING đến hạn).
         if ($outbox->wasRecentlyCreated) {
             SendB2bWebhookJob::dispatch($outbox->id)->afterCommit();
         }
@@ -75,15 +97,92 @@ class B2bWebhookService
     }
 
     /**
-     * Thực hiện gửi webhook tới URL đại lý kèm kiểm tra SSRF và chữ ký HMAC.
+     * Nhận quyền sở hữu xử lý một sự kiện webhook bằng atomic claim + lease.
+     *
+     * Chỉ đúng một tiến trình thắng được UPDATE có điều kiện này; các tiến trình
+     * khác nhận về null và phải bỏ qua. Nhờ vậy nhiều worker không cùng sở hữu
+     * một lần xử lý.
+     *
+     * @return string|null Token sở hữu, null nếu không nhận được.
      */
-    public function guiWebhook(WebhookOutbox $outbox): bool
+    public function nhanXuLy(int $outboxId): ?string
     {
+        $owner = (string) Str::uuid();
+        $now = now();
+
+        $affected = DB::table('webhook_outbox')
+            ->where('id', $outboxId)
+            ->where(function ($q) use ($now) {
+                $q->where(function ($sub) use ($now) {
+                    $sub->where('trang_thai', 'PENDING')
+                        ->where(function ($t) use ($now) {
+                            $t->whereNull('lan_thu_tiep_theo')
+                              ->orWhere('lan_thu_tiep_theo', '<=', $now);
+                        });
+                })->orWhere(function ($sub) use ($now) {
+                    $sub->where('trang_thai', 'PROCESSING')
+                        ->whereNotNull('khoa_den')
+                        ->where('khoa_den', '<', $now);
+                });
+            })
+            ->update([
+                'trang_thai' => 'PROCESSING',
+                'khoa_so_huu' => $owner,
+                'khoa_den' => $now->copy()->addSeconds(self::LEASE_SECONDS),
+                'updated_at' => $now,
+            ]);
+
+        return $affected === 1 ? $owner : null;
+    }
+
+    /**
+     * Nhận quyền xử lý thủ công (Admin bấm gửi lại) — bỏ qua điều kiện trạng thái.
+     */
+    public function nhanXuLyThuCong(int $outboxId): ?string
+    {
+        $owner = (string) Str::uuid();
+        $now = now();
+
+        $affected = DB::table('webhook_outbox')
+            ->where('id', $outboxId)
+            ->update([
+                'trang_thai' => 'PROCESSING',
+                'khoa_so_huu' => $owner,
+                'khoa_den' => $now->copy()->addSeconds(self::LEASE_SECONDS),
+                'updated_at' => $now,
+            ]);
+
+        return $affected === 1 ? $owner : null;
+    }
+
+    /**
+     * Thực hiện gửi webhook tới URL đại lý kèm kiểm tra SSRF và chữ ký HMAC.
+     *
+     * KHÔNG giữ database lock trong lúc gọi HTTP. Mọi cập nhật kết quả đều phải
+     * kiểm tra quyền sở hữu (khoa_so_huu) để không ghi đè kết quả của worker khác.
+     */
+    public function guiWebhook(WebhookOutbox $outbox, ?string $owner = null): bool
+    {
+        $owner = $owner ?: $this->nhanXuLy($outbox->id);
+
+        if (!$owner) {
+            // Không nhận được quyền sở hữu: đã có tiến trình khác xử lý hoặc chưa đến hạn.
+            return false;
+        }
+
+        $outbox->refresh();
+
         $daiLy = $outbox->daiLyApi ?: \App\Models\DaiLyApi::with('cauHinhApi')->find($outbox->dai_ly_api_id);
         $cauHinh = $daiLy?->cauHinhApi;
 
         if (!$cauHinh || empty($cauHinh->webhook_url)) {
-            $outbox->update(['trang_thai' => 'FAILED']);
+            $this->ghiKetQua($outbox, $owner, [
+                'trang_thai' => 'MANUAL_REVIEW',
+                'khoa_so_huu' => null,
+                'khoa_den' => null,
+                'lan_thu_tiep_theo' => null,
+            ]);
+
             return false;
         }
 
@@ -95,28 +194,25 @@ class B2bWebhookService
             $allowHttp = app()->environment('local', 'testing');
             UrlSafetyValidator::validate($url, $allowHttp);
         } catch (\Throwable $ve) {
-            Log::warning("B2bWebhookService: URL webhook không an toàn: " . $ve->getMessage(), [
+            Log::warning('B2bWebhookService: URL webhook không an toàn: ' . $ve->getMessage(), [
                 'outbox_id' => $outbox->id,
                 'url' => $url,
             ]);
 
-            $outbox->update([
-                'trang_thai' => 'FAILED',
-                'so_lan_thu' => $outbox->so_lan_thu + 1,
-            ]);
-
-            LichSuGuiWebhook::create([
-                'webhook_outbox_id' => $outbox->id,
-                'url' => $url,
-                'http_status' => null,
-                'loi' => 'SSRF check failed: ' . $ve->getMessage(),
-                'created_at' => now(),
+            // URL không an toàn là lỗi cấu hình phía đối tác, retry tự động vô nghĩa.
+            // Chuyển sang MANUAL_REVIEW để vận hành xử lý, không đốt lượt thử.
+            $this->ghiKetQua($outbox, $owner, [
+                'trang_thai' => 'MANUAL_REVIEW',
+                'khoa_so_huu' => null,
+                'khoa_den' => null,
+                'lan_thu_tiep_theo' => null,
             ]);
 
             return false;
         }
 
-        // 2. Ký payload bằng HMAC-SHA256
+        // 2. Ký payload bằng HMAC-SHA256. Payload nghiệp vụ và event_id giữ nguyên
+        //    qua mọi lần gửi; chỉ timestamp chữ ký được làm mới.
         $payloadString = $outbox->payload_json;
         $timestamp = time();
         $signature = hash_hmac('sha256', "{$timestamp}\n{$payloadString}", $webhookSecret);
@@ -129,12 +225,7 @@ class B2bWebhookService
             'User-Agent' => 'tv9tech-B2B-Webhook/1.0',
         ];
 
-        // Đặt lease khóa 2 phút chống worker khác tranh chấp
-        $outbox->update([
-            'trang_thai' => 'PROCESSING',
-            'khoa_den' => now()->addMinutes(2),
-        ]);
-
+        // 3. Gọi HTTP KHÔNG giữ bất kỳ lock DB nào (lease đã được ghi trước đó bằng 1 câu UPDATE).
         $startTime = microtime(true);
         $httpStatus = null;
         $responseBody = null;
@@ -162,7 +253,8 @@ class B2bWebhookService
             $errorMessage = $e->getMessage();
         }
 
-        // 3. Ghi log lịch sử gửi (không lộ secret trong headers)
+        // 4. Ghi log lịch sử gửi. Headers KHÔNG chứa secret (chỉ chứa chữ ký HMAC
+        //    được sinh từ secret, không thể dùng để suy ngược secret).
         LichSuGuiWebhook::create([
             'webhook_outbox_id' => $outbox->id,
             'url' => $url,
@@ -175,32 +267,66 @@ class B2bWebhookService
             'created_at' => now(),
         ]);
 
-        // 4. Cập nhật trạng thái outbox và lên lịch retry nếu lỗi
-        $newAttempts = $outbox->so_lan_thu + 1;
+        // 5. Cập nhật trạng thái outbox — CHỈ khi vẫn còn là chủ sở hữu lease.
+        $newAttempts = (int) $outbox->so_lan_thu + 1;
+
         if ($isSuccess) {
-            $outbox->update([
+            $updated = $this->ghiKetQua($outbox, $owner, [
                 'trang_thai' => 'SUCCESS',
                 'so_lan_thu' => $newAttempts,
+                'khoa_so_huu' => null,
                 'khoa_den' => null,
+                'lan_thu_tiep_theo' => null,
             ]);
+
+            if (!$updated) {
+                Log::warning("B2bWebhookService: mất quyền sở hữu lease khi ghi kết quả THÀNH CÔNG cho outbox #{$outbox->id}. Kết quả không được ghi để tránh ghi đè worker khác.");
+                return false;
+            }
+
             return true;
-        } else {
-            // Backoff đồng bộ: lần 1: 30s, lần 2: 120s, lần 3: 600s, lần 4: 1800s, lần 5: 7200s
-            $backoffDelays = [30, 120, 600, 1800, 7200];
-            $nextDelay = $backoffDelays[min($newAttempts - 1, count($backoffDelays) - 1)];
-
-            $status = ($newAttempts >= 5) ? 'FAILED' : 'PENDING';
-            $nextRun = ($status === 'PENDING') ? now()->addSeconds($nextDelay) : null;
-
-            $outbox->update([
-                'trang_thai' => $status,
-                'so_lan_thu' => $newAttempts,
-                'lan_thu_tiep_theo' => $nextRun,
-                'khoa_den' => null,
-            ]);
-
-            return false;
         }
+
+        // Thất bại: tính khoảng chờ kế tiếp theo cấu hình backoff đã đồng bộ với MAX_ATTEMPTS.
+        if ($newAttempts >= self::MAX_ATTEMPTS) {
+            // Hết lượt thử tự động -> cần xử lý thủ công. KHÔNG ảnh hưởng trạng thái đơn/công nợ.
+            $status = 'MANUAL_REVIEW';
+            $nextRun = null;
+        } else {
+            $status = 'PENDING';
+            $nextRun = now()->addSeconds(self::BACKOFF_SECONDS[$newAttempts - 1]);
+        }
+
+        $updated = $this->ghiKetQua($outbox, $owner, [
+            'trang_thai' => $status,
+            'so_lan_thu' => $newAttempts,
+            'khoa_so_huu' => null,
+            'khoa_den' => null,
+            'lan_thu_tiep_theo' => $nextRun,
+        ]);
+
+        if (!$updated) {
+            Log::warning("B2bWebhookService: mất quyền sở hữu lease khi ghi kết quả THẤT BẠI cho outbox #{$outbox->id}. Kết quả không được ghi để tránh ghi đè worker khác.");
+        }
+
+        return false;
+    }
+
+    /**
+     * Ghi kết quả gửi webhook với điều kiện vẫn đang giữ quyền sở hữu lease.
+     *
+     * @return bool true nếu ghi được (vẫn là chủ sở hữu), false nếu đã mất quyền.
+     */
+    protected function ghiKetQua(WebhookOutbox $outbox, string $owner, array $attributes): bool
+    {
+        $attributes['updated_at'] = now();
+
+        $affected = DB::table('webhook_outbox')
+            ->where('id', $outbox->id)
+            ->where('khoa_so_huu', $owner)
+            ->update($attributes);
+
+        return $affected === 1;
     }
 
     /**
@@ -209,7 +335,26 @@ class B2bWebhookService
     public function guiLaiThuCong(int $webhookOutboxId): array
     {
         $outbox = WebhookOutbox::findOrFail($webhookOutboxId);
-        $ok = $this->guiWebhook($outbox);
+
+        if ($outbox->trang_thai === 'PROCESSING' && $outbox->khoa_den && $outbox->khoa_den->isFuture()) {
+            return [
+                'success' => false,
+                'outbox' => $outbox,
+                'message' => 'Sự kiện đang được một tiến trình khác gửi. Vui lòng thử lại sau.',
+            ];
+        }
+
+        // Gửi lại thủ công được phép bỏ qua trạng thái (kể cả MANUAL_REVIEW / FAILED)
+        $owner = $this->nhanXuLyThuCong($outbox->id);
+        if (!$owner) {
+            return [
+                'success' => false,
+                'outbox' => $outbox->fresh(),
+                'message' => 'Không nhận được quyền gửi lại sự kiện này.',
+            ];
+        }
+
+        $ok = $this->guiWebhook($outbox->fresh(), $owner);
 
         return [
             'success' => $ok,

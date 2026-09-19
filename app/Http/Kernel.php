@@ -73,5 +73,6 @@ class Kernel extends HttpKernel
         'b2b.hmac' => \App\Http\Middleware\VerifyPartnerHmacSignature::class,
         'b2b.ip' => \App\Http\Middleware\VerifyPartnerIpAllowlist::class,
         'b2b.throttle' => \App\Http\Middleware\B2bThrottleRequests::class,
+        'b2b.shape' => \App\Http\Middleware\ValidateB2bRequestShape::class,
     ];
 }

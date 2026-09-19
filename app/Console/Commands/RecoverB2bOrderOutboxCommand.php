@@ -2,25 +2,31 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\ProcessMobileTopupJob;
 use App\Models\B2bOrderOutbox;
 use App\Models\DonHang;
+use App\Services\Alert\TelegramAlertService;
+use App\Services\DaiLyApi\B2bOrderRecoveryService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class RecoverB2bOrderOutboxCommand extends Command
 {
-    protected $signature = 'b2b:recover-outbox {--limit=50 : Số lượng tối đa bản ghi xử lý trong một lần quét}';
+    protected $signature = 'b2b:recover-outbox
+                            {--limit=50 : Số lượng tối đa bản ghi xử lý trong một lần quét}
+                            {--max-attempts=8 : Số lần phục hồi tối đa trước khi chuyển đối soát thủ công}';
+
     protected $description = 'Quét và phục hồi các công việc Outbox tạo đơn B2B bị treo hoặc rơi rớt sau transaction commit';
 
-    public function handle(): int
+    public function handle(B2bOrderRecoveryService $recovery, TelegramAlertService $telegramAlert): int
     {
         $limit = (int) $this->option('limit');
+        $maxAttempts = (int) $this->option('max-attempts');
         $now = now();
         $stalePendingTime = $now->copy()->subSeconds(30);
 
-        // Tìm các bản ghi PENDING quá 30s hoặc PROCESSING bị quá hạn lock
+        // Tìm các bản ghi PENDING quá 30s (khoảng trống giữa commit và dispatch queue)
+        // hoặc PROCESSING đã hết hạn lease (worker đột tử).
         $staleRecords = B2bOrderOutbox::where(function ($q) use ($stalePendingTime, $now) {
             $q->where(function ($sub) use ($stalePendingTime) {
                 $sub->where('status', 'PENDING')
@@ -40,9 +46,11 @@ class RecoverB2bOrderOutboxCommand extends Command
         }
 
         $recovered = 0;
+        $held = 0;
+        $manual = 0;
 
         foreach ($staleRecords as $record) {
-            // Atomic lock trên từng bản ghi
+            // Nhận xử lý nguyên tử: chỉ tiến trình thắng cuộc đua mới nhận được bản ghi.
             $affected = DB::table('b2b_order_outbox')
                 ->where('id', $record->id)
                 ->where(function ($q) use ($now) {
@@ -66,17 +74,30 @@ class RecoverB2bOrderOutboxCommand extends Command
 
             $record->refresh();
 
-            // Kiểm tra số lần thử tối đa
-            if ($record->attempts > 5) {
+            // Hết lượt phục hồi: KHÔNG được biến đơn thành thất bại hay nhả hạn mức.
+            // Chỉ dừng tự động phục hồi và chuyển sang đối soát thủ công.
+            if ($record->attempts > $maxAttempts) {
                 $record->update([
-                    'status' => 'FAILED',
-                    'last_error' => 'Vượt quá 5 lần phục hồi Outbox mà không hoàn tất.',
+                    'status' => 'MANUAL_REVIEW',
+                    'last_error' => "Vượt quá {$maxAttempts} lần phục hồi tự động. Cần đối soát thủ công.",
                 ]);
-                Log::error("B2B Order Outbox ID #{$record->id} failed after {$record->attempts} recovery attempts.");
+
+                $donHang = DonHang::find($record->don_hang_id);
+                if ($donHang) {
+                    try {
+                        $telegramAlert->alertManualReview(
+                            $donHang,
+                            "OUTBOX B2B #{$record->id}: đơn #{$donHang->ma_don_hang} vượt quá {$maxAttempts} lần phục hồi tự động. Cần đối soát thủ công (giữ nguyên hạn mức/công nợ)."
+                        );
+                    } catch (\Throwable) {
+                    }
+                }
+
+                Log::error("B2B Order Outbox #{$record->id} vượt quá {$maxAttempts} lần phục hồi, chuyển đối soát thủ công.");
+                $manual++;
                 continue;
             }
 
-            // Kiểm tra trạng thái đơn hàng tương ứng
             $donHang = DonHang::find($record->don_hang_id);
             if (!$donHang) {
                 $record->update([
@@ -86,94 +107,31 @@ class RecoverB2bOrderOutboxCommand extends Command
                 continue;
             }
 
-            // Nếu đơn đã ở trạng thái cuối cùng (HOAN_THANH / THAT_BAI)
-            if (in_array($donHang->trang_thai_don_hang, ['HOAN_THANH', 'SUCCESS', 'THAT_BAI', 'FAILED'], true)) {
+            try {
+                $action = $recovery->phucHoi($donHang, $record);
+
+                match ($action) {
+                    B2bOrderRecoveryService::ACTION_HOLD_FOR_LEASE => $held++,
+                    B2bOrderRecoveryService::ACTION_MANUAL_REVIEW => $manual++,
+                    B2bOrderRecoveryService::ACTION_ALREADY_FINAL => null,
+                    default => $recovered++,
+                };
+
+                $this->line("Outbox #{$record->id} (Đơn #{$donHang->ma_don_hang}): {$action}");
+            } catch (\Throwable $e) {
+                // Không để lỗi phục hồi một đơn làm hỏng cả lượt quét.
+                // Trả lease để lượt quét sau thử lại thay vì kẹt cứng ở PROCESSING.
                 $record->update([
-                    'status' => 'PROCESSED',
-                    'processed_at' => now(),
+                    'status' => 'PENDING',
+                    'locked_until' => null,
+                    'last_error' => mb_substr($e->getMessage(), 0, 500),
                 ]);
-                continue;
-            }
 
-            // Kiểm tra bằng chứng các lần gọi NCC cho đơn này
-            $latestCall = $donHang->lanGoiNhaCungCap()
-                ->where('loai_yeu_cau', 'CHARGING')
-                ->orderByDesc('id')
-                ->first();
-
-            // Tình huống 1: Đơn đang QUEUED -> dispatch job
-            if ($donHang->trang_thai_don_hang === 'QUEUED') {
-                ProcessMobileTopupJob::dispatch($donHang->id);
-                $recovered++;
-                $this->info("Đã dispatch lại ProcessMobileTopupJob cho đơn #{$donHang->ma_don_hang} (Outbox ID #{$record->id})");
-                continue;
-            }
-
-            // Tình huống 2: Đơn đang PROCESSING
-            if (in_array($donHang->trang_thai_don_hang, ['PROCESSING', 'DANG_XU_LY'], true)) {
-                // Điểm chết 1: Worker chết trước khi tạo lần gọi NCC (chưa có record lần gọi nào)
-                if (!$latestCall) {
-                    // Nếu thời gian xử lý đã quá 2 phút mà không có lần gọi nào, cho phép dispatch lại an toàn
-                    $batDau = $donHang->bat_dau_xu_ly_luc ?: $donHang->updated_at ?: $donHang->created_at;
-                    if ($batDau && $batDau->diffInMinutes(now()) >= 2) {
-                        ProcessMobileTopupJob::dispatch($donHang->id);
-                        $recovered++;
-                        $this->info("Đã dispatch lại ProcessMobileTopupJob (chưa từng gọi NCC) cho đơn #{$donHang->ma_don_hang} (Outbox ID #{$record->id})");
-                    }
-                    continue;
-                }
-
-                // Điểm chết 2 & 3: Đã tạo lần gọi NCC hoặc đang gửi dở dang (kết quả chưa rõ ràng)
-                if (in_array($latestCall->trang_thai, ['PROCESSING', 'UNKNOWN_OR_PENDING'], true) ||
-                    in_array($latestCall->ket_qua_xac_dinh, ['UNKNOWN_OR_PENDING', 'PENDING'], true)) {
-                    // TUYỆT ĐỐI KHÔNG TẠO LỆNH NẠP MỚI / MÃ THAM CHIẾU MỚI
-                    // Chuyển sang tra cứu trạng thái bằng chính partner_ref_id gốc
-                    $donHang->update(['trang_thai_don_hang' => \App\Enums\TrangThaiDonHang::PROVIDER_PENDING->value]);
-                    \App\Jobs\CheckMobileTopupStatusJob::dispatch($latestCall->id);
-                    $recovered++;
-                    $this->info("Đã chuyển đơn #{$donHang->ma_don_hang} sang PROVIDER_PENDING và dispatch CheckMobileTopupStatusJob (Call ID #{$latestCall->id})");
-                    continue;
-                }
-
-                // Điểm chết 4: NCC đã trả kết quả cuối nhưng worker chết trước khi chốt đơn
-                if ($latestCall->ket_qua_xac_dinh === 'SUCCESS') {
-                    app(\App\Services\DaiLyApi\B2bCreditService::class)->chotCongNoThanhCong($donHang);
-                    $donHang->update([
-                        'trang_thai_don_hang' => 'SUCCESS',
-                        'hoan_thanh_luc' => now(),
-                    ]);
-                    $record->update(['status' => 'PROCESSED', 'processed_at' => now()]);
-                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($donHang, 'order.completed');
-                    $recovered++;
-                    $this->info("Đã hoàn tất chốt thành công đơn #{$donHang->ma_don_hang} dựa trên kết quả NCC.");
-                    continue;
-                }
-
-                if ($latestCall->ket_qua_xac_dinh === 'DEFINITIVE_FAILURE') {
-                    app(\App\Services\DaiLyApi\B2bCreditService::class)->giaiPhongKhoanGiu($donHang, 'NCC thất bại dứt khoát');
-                    $donHang->update([
-                        'trang_thai_don_hang' => 'FAILED',
-                        'that_bai_luc' => now(),
-                    ]);
-                    $record->update(['status' => 'PROCESSED', 'processed_at' => now()]);
-                    app(\App\Services\DaiLyApi\B2bWebhookService::class)->taoSuKien($donHang, 'order.completed');
-                    $recovered++;
-                    $this->info("Đã giải phóng khoản giữ và chuyển thất bại đơn #{$donHang->ma_don_hang} dựa trên kết quả NCC.");
-                    continue;
-                }
-            }
-
-            // Tình huống 3: Đơn ở PROVIDER_PENDING hoặc MANUAL_REVIEW
-            if (in_array($donHang->trang_thai_don_hang, ['PROVIDER_PENDING', 'MANUAL_REVIEW'], true) && $latestCall) {
-                \App\Jobs\CheckMobileTopupStatusJob::dispatch($latestCall->id);
-                $recovered++;
-                $this->info("Đã kích hoạt CheckMobileTopupStatusJob cho đơn #{$donHang->ma_don_hang} (Call ID #{$latestCall->id})");
+                Log::error("B2B Order Outbox #{$record->id}: lỗi khi phục hồi: " . $e->getMessage());
             }
         }
 
-        if ($recovered > 0) {
-            $this->info("Đã phục hồi thành công {$recovered} đơn hàng B2B từ Outbox.");
-        }
+        $this->info("Phục hồi Outbox B2B: {$recovered} đơn xử lý, {$held} đơn đang có worker sở hữu, {$manual} đơn chuyển đối soát.");
 
         return Command::SUCCESS;
     }

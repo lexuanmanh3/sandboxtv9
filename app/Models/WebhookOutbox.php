@@ -21,6 +21,7 @@ class WebhookOutbox extends Model
         'so_lan_thu',
         'lan_thu_tiep_theo',
         'khoa_den',
+        'khoa_so_huu',
     ];
 
     protected $casts = [

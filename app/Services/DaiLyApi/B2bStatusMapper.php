@@ -68,4 +68,34 @@ class B2bStatusMapper
     {
         return in_array($publicStatus, [self::PUBLIC_SUCCESS, self::PUBLIC_FAILED], true);
     }
+
+    /**
+     * Mã kết quả công khai tương ứng với trạng thái công khai.
+     * Đây là hợp đồng ổn định dành cho đối tác, KHÔNG phụ thuộc trạng thái nội bộ.
+     */
+    public static function resultCode(string $publicStatus): string
+    {
+        return match ($publicStatus) {
+            self::PUBLIC_SUCCESS => '00',
+            self::PUBLIC_FAILED => '01',
+            self::PUBLIC_MANUAL_REVIEW => '02',
+            self::PUBLIC_PROCESSING => '03',
+            default => '04', // pending
+        };
+    }
+
+    /**
+     * Diễn giải trạng thái công khai sang tiếng Việt cho tài liệu/tra cứu.
+     */
+    public static function moTa(string $publicStatus): string
+    {
+        return match ($publicStatus) {
+            self::PUBLIC_PENDING => 'Đã tiếp nhận, đang chờ xử lý',
+            self::PUBLIC_PROCESSING => 'Đã gửi nhà cung cấp, chưa có kết quả cuối',
+            self::PUBLIC_SUCCESS => 'Nạp thành công',
+            self::PUBLIC_FAILED => 'Nạp thất bại chắc chắn',
+            self::PUBLIC_MANUAL_REVIEW => 'Chưa xác định kết quả, đang đối soát thủ công',
+            default => 'Không xác định',
+        };
+    }
 }

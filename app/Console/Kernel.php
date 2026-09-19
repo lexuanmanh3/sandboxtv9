@@ -19,6 +19,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('topup:reconcile-pending')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('b2b:recover-outbox')->everyMinute()->withoutOverlapping();
         $schedule->command('b2b:retry-webhooks')->everyMinute()->withoutOverlapping();
+
+        // Lưới an toàn vận hành: phát hiện khoản giữ treo, lệch sổ công nợ, tồn đọng outbox.
+        // Lệnh trả mã thoát khác 0 khi có báo động — monitoring bắt mã thoát này để cảnh báo.
+        // Lệnh CHỈ BÁO CÁO, tuyệt đối không tự sửa số dư hay tự giải phóng hạn mức.
+        $schedule->command('b2b:health-check')->everyFifteenMinutes()->withoutOverlapping();
     }
 
     /**

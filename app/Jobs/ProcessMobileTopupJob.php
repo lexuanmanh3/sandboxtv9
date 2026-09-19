@@ -30,11 +30,23 @@ class ProcessMobileTopupJob implements ShouldQueue
     public int $tries = 1;
     public int $timeout = 60;
 
+    /**
+     * Thời hạn lease sở hữu xử lý đơn hàng (giây).
+     * Bắt buộc phải lớn hơn $timeout để recovery không thể chen vào giữa lúc worker
+     * còn đang gọi nhà cung cấp.
+     */
+    public const LEASE_SECONDS = 300;
+
+    /**
+     * Các trạng thái coi như đã kết thúc — worker tuyệt đối không xử lý tiếp.
+     */
+    private const TRANG_THAI_KET_THUC = ['SUCCESS', 'PROVIDER_PENDING', 'MANUAL_REVIEW', 'REFUND_PENDING', 'REFUNDED', 'FAILED'];
+
     public function __construct(public int $donHangId) {}
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('topup-order-'.$this->donHangId))->expireAfter(180)->dontRelease()];
+        return [(new WithoutOverlapping('topup-order-'.$this->donHangId))->expireAfter(self::LEASE_SECONDS)->dontRelease()];
     }
 
     public function handle(
@@ -44,15 +56,35 @@ class ProcessMobileTopupJob implements ShouldQueue
         TelegramAlertService $telegramAlert,
         ViNguoiDungService $viService
     ): void {
-        $donHang = DB::transaction(function () use ($state) {
+        $owner = (string) Str::uuid();
+
+        // 1. Nhận sở hữu xử lý đơn hàng bằng lease nguyên tử.
+        //    Đây là bằng chứng duy nhất cho biết "còn worker nào đang sở hữu đơn" —
+        //    recovery dựa vào lease này thay vì dựa vào tuổi đơn.
+        $donHang = DB::transaction(function () use ($state, $owner) {
             $order = DonHang::query()->lockForUpdate()->findOrFail($this->donHangId);
-            if (in_array(strtoupper($order->trang_thai_don_hang), ['SUCCESS', 'PROVIDER_PENDING', 'MANUAL_REVIEW', 'REFUND_PENDING', 'REFUNDED', 'FAILED'], true)) {
+
+            if (in_array(strtoupper($order->trang_thai_don_hang), self::TRANG_THAI_KET_THUC, true)) {
                 return null;
             }
+
+            // Worker khác đang giữ lease còn hiệu lực -> từ chối nhận.
+            // Không được tạo lần gọi NCC mới khi chưa chắc chắn worker cũ đã chết.
+            if ($order->dangCoLeaseXuLy() && $order->xu_ly_owner !== $owner) {
+                Log::info("ProcessMobileTopupJob: Đơn #{$order->id} đang được worker khác sở hữu (lease đến {$order->xu_ly_lease_den->toIso8601String()}), bỏ qua để tránh nạp trùng.");
+                return null;
+            }
+
             if (strtoupper($order->trang_thai_don_hang) === 'QUEUED') {
                 $state->chuyen($order, TrangThaiDonHang::PROCESSING, 'Worker bắt đầu xử lý');
                 $order->update(['bat_dau_xu_ly_luc' => now()]);
             }
+
+            $order->update([
+                'xu_ly_owner' => $owner,
+                'xu_ly_lease_den' => now()->addSeconds(self::LEASE_SECONDS),
+            ]);
+
             return $order;
         });
         if (!$donHang) return;
@@ -62,29 +94,43 @@ class ProcessMobileTopupJob implements ShouldQueue
             ->update(['status' => 'PROCESSING', 'locked_until' => now()->addMinutes(5)]);
 
         // Chống nạp trùng khi worker trước bị timeout/crash giữa chừng:
-        // Nếu đã có lần gọi CHARGING đang PROCESSING, tuyệt đối không tạo partner_ref_id mới
-        $inFlightCall = $donHang->lanGoiNhaCungCap()
+        // Bất kỳ lần gọi CHARGING nào chưa có kết quả cuối (kể cả đã bị recovery đánh dấu
+        // UNKNOWN_OR_PENDING) đều là bằng chứng "có thể đã gửi lệnh sang NCC".
+        // TUYỆT ĐỐI không tạo partner_ref_id mới trong trường hợp này.
+        $unresolvedCall = $donHang->lanGoiNhaCungCap()
             ->where('loai_yeu_cau', 'CHARGING')
-            ->where('trang_thai', 'PROCESSING')
+            ->where(function ($q) {
+                $q->whereNull('ket_qua_xac_dinh')
+                  ->orWhere('ket_qua_xac_dinh', KetQuaNhaCungCap::UNKNOWN_OR_PENDING->value);
+            })
             ->orderByDesc('id')
             ->first();
 
-        if ($inFlightCall) {
-            DB::transaction(function () use ($donHang, $inFlightCall, $state) {
+        if ($unresolvedCall) {
+            DB::transaction(function () use ($donHang, $unresolvedCall, $state) {
                 $order = DonHang::query()->lockForUpdate()->findOrFail($donHang->id);
                 if ($order->trang_thai_don_hang !== TrangThaiDonHang::PROVIDER_PENDING->value) {
                     $state->chuyen($order, TrangThaiDonHang::PROVIDER_PENDING, 'Phát hiện yêu cầu nạp đang xử lý dở dang, chuyển sang tra cứu trạng thái');
                 }
-                $inFlightCall->update([
+                $unresolvedCall->update([
                     'trang_thai' => 'UNKNOWN_OR_PENDING',
                     'ket_qua_xac_dinh' => 'UNKNOWN_OR_PENDING',
                 ]);
             });
-            CheckMobileTopupStatusJob::dispatch($inFlightCall->id)->delay(now()->addSeconds(10));
+            $this->nhaLeaseXuLy($owner);
+            CheckMobileTopupStatusJob::dispatch($unresolvedCall->id)->delay(now()->addSeconds(10));
             return;
         }
 
         foreach ($routing->danhSach($donHang) as $mapping) {
+            // Kiểm tra quyền sở hữu trước mỗi lần tạo lệnh nạp mới.
+            // Nếu recovery/tiến trình khác đã tiếp quản hoặc đơn đã rời PROCESSING thì
+            // dừng ngay — không được tạo thêm partner_ref_id mới.
+            if (!$this->conSoHuuXuLy($donHang->id, $owner)) {
+                Log::warning("ProcessMobileTopupJob: Mất quyền sở hữu xử lý đơn #{$donHang->id}, dừng fallback để tránh nạp trùng.");
+                return;
+            }
+
             $lanGoi = LanGoiNhaCungCap::create([
                 'don_hang_id' => $donHang->id,
                 'cau_hinh_dich_vu_id' => $mapping->cauHinhDichVu?->id,
@@ -179,6 +225,7 @@ class ProcessMobileTopupJob implements ShouldQueue
             if ($ketQua->ketQua === KetQuaNhaCungCap::SUCCESS) {
                 // Reset bộ đếm lỗi liên tiếp khi giao dịch thành công
                 Cache::forget($cacheKey);
+                $this->nhaLeaseXuLy($owner);
                 $telegramAlert->alertOrderSuccess($donHang->fresh(), $lanGoi);
                 return;
             }
@@ -249,6 +296,48 @@ class ProcessMobileTopupJob implements ShouldQueue
                 }
             }
         });
+
+        // Đơn đã có kết quả cuối hoặc đã chuyển sang luồng tra cứu -> nhả lease sở hữu.
+        $this->nhaLeaseXuLy($owner);
+    }
+
+    /**
+     * Kiểm tra worker còn thực sự sở hữu quyền xử lý đơn hàng hay không.
+     * Trả về false nếu lease đã hết hạn, đã bị tiến trình khác chiếm, hoặc đơn đã
+     * rời trạng thái PROCESSING. Dùng trước mọi hành động có thể gửi lệnh sang NCC.
+     */
+    private function conSoHuuXuLy(int $donHangId, string $owner): bool
+    {
+        return DB::transaction(function () use ($donHangId, $owner) {
+            $order = DonHang::query()->lockForUpdate()->find($donHangId);
+
+            if (!$order || $order->xu_ly_owner !== $owner) {
+                return false;
+            }
+
+            if (!$order->dangCoLeaseXuLy()) {
+                return false;
+            }
+
+            if (strtoupper((string) $order->trang_thai_don_hang) !== 'PROCESSING') {
+                return false;
+            }
+
+            // Gia hạn lease cho lần lặp tiếp theo của vòng fallback nhà cung cấp
+            $order->update(['xu_ly_lease_den' => now()->addSeconds(self::LEASE_SECONDS)]);
+
+            return true;
+        });
+    }
+
+    /**
+     * Nhả lease sở hữu xử lý (chỉ nhả nếu vẫn đang là chủ sở hữu).
+     */
+    private function nhaLeaseXuLy(string $owner): void
+    {
+        DonHang::where('id', $this->donHangId)
+            ->where('xu_ly_owner', $owner)
+            ->update(['xu_ly_owner' => null, 'xu_ly_lease_den' => null]);
     }
 
     private function partnerRef(): string

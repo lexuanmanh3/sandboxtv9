@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bàn giao an toàn tiền B2B</title>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    --ground:      #F2F5F4;
+    --surface:     #FFFFFF;
+    --surface-alt: #E9EFED;
+    --ink:         #131C22;
+    --ink-muted:   #586B71;
+    --ink-faint:   #8A9B9F;
+    --rule:        #D6DEDC;
+    --rule-strong: #B9C6C3;
+    --accent:      #0E6E60;
+    --accent-soft: #DCEDE9;
+    --crit:        #A81E14;
+    --crit-soft:   #F7E2DF;
+    --high:        #8A5800;
+    --high-soft:   #F7EBD5;
+    --med:         #4A5C77;
+    --med-soft:    #E3E8F0;
+    --ok:          #1D6B3A;
+    --ok-soft:     #DCEFE2;
+
+    --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --f-body:    "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --f-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --pad: 20px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0D1315;
+      --surface:     #151E21;
+      --surface-alt: #1C272B;
+      --ink:         #E4EDEA;
+      --ink-muted:   #94A8AB;
+      --ink-faint:   #6B7F83;
+      --rule:        #263336;
+      --rule-strong: #37474B;
+      --accent:      #45BFA6;
+      --accent-soft: #12312C;
+      --crit:        #F0776A;
+      --crit-soft:   #351B18;
+      --high:        #E0A63C;
+      --high-soft:   #332614;
+      --med:         #9DB2D4;
+      --med-soft:    #1E2735;
+      --ok:          #63C489;
+      --ok-soft:     #14301E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0D1315;
+    --surface:     #151E21;
+    --surface-alt: #1C272B;
+    --ink:         #E4EDEA;
+    --ink-muted:   #94A8AB;
+    --ink-faint:   #6B7F83;
+    --rule:        #263336;
+    --rule-strong: #37474B;
+    --accent:      #45BFA6;
+    --accent-soft: #12312C;
+    --crit:        #F0776A;
+    --crit-soft:   #351B18;
+    --high:        #E0A63C;
+    --high-soft:   #332614;
+    --med:         #9DB2D4;
+    --med-soft:    #1E2735;
+    --ok:          #63C489;
+    --ok-soft:     #14301E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    padding-inline: var(--pad);
+    padding-block: 0;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin-inline: auto;
+    padding-block: 0 72px;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 10;
+    background: var(--ground);
+    border-bottom: 1px solid var(--rule);
+    margin-inline: calc(var(--pad) * -1);
+    padding-inline: var(--pad);
+    padding-block: 11px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    align-items: baseline;
+  }
+  .masthead__name {
+    font-family: var(--f-display);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .masthead__meta {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    color: var(--ink-muted);
+    letter-spacing: 0.01em;
+  }
+  .masthead__spacer { flex: 1 1 auto; }
+
+  /* ---------- hero ---------- */
+
+  .hero { padding-block: 52px 34px; }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--accent);
+    margin: 0 0 16px;
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(2.1rem, 5.6vw, 3.35rem);
+    line-height: 1.06;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    margin: 0 0 20px;
+  }
+
+  .standfirst {
+    font-size: 1.125rem;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    max-width: 60ch;
+    margin: 0 0 28px;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+  }
+  .fact {
+    border: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    padding: 3px 9px;
+    color: var(--ink-muted);
+    white-space: nowrap;
+  }
+  .fact b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- stat strip ---------- */
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-block: 0 52px;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 17px 18px 15px;
+  }
+  .stat__n {
+    font-family: var(--f-mono);
+    font-size: 1.7rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    display: block;
+  }
+  .stat__l {
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+    line-height: 1.4;
+    margin-top: 5px;
+    display: block;
+  }
+  .stat--ok  .stat__n { color: var(--ok); }
+  .stat--crit .stat__n { color: var(--crit); }
+
+  /* ---------- sections ---------- */
+
+  section { margin-block: 0 56px; scroll-margin-top: 64px; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-size: clamp(1.5rem, 3.4vw, 1.95rem);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.017em;
+    text-wrap: balance;
+    margin: 0 0 6px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    display: block;
+    margin-bottom: 9px;
+  }
+
+  .sec-note {
+    color: var(--ink-muted);
+    max-width: var(--measure);
+    margin: 16px 0 26px;
+  }
+
+  h3 {
+    font-family: var(--f-body);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.008em;
+    text-wrap: balance;
+    margin: 0 0 12px;
+  }
+
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  p:last-child { margin-bottom: 0; }
+
+  strong { font-weight: 600; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.85em;
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.5px 4px;
+    word-break: break-word;
+  }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ul { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-faint); }
+
+  /* ---------- severity chips ---------- */
+
+  .sev {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 2.5px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .sev--crit { background: var(--crit-soft); color: var(--crit); border-color: var(--crit); }
+  .sev--high { background: var(--high-soft); color: var(--high); border-color: var(--high); }
+  .sev--med  { background: var(--med-soft);  color: var(--med);  border-color: var(--med); }
+  .sev--ok   { background: var(--ok-soft);   color: var(--ok);   border-color: var(--ok); }
+
+  /* ---------- findings ledger ---------- */
+
+  .scroll { overflow-x: auto; margin-block: 0 26px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 560px;
+    font-size: 0.875rem;
+  }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-faint);
+    padding-bottom: 9px;
+  }
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ink-muted);
+    padding: 0 14px 8px 0;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+  td {
+    padding: 11px 14px 11px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  th:last-child, td:last-child { padding-right: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .ledger__id {
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .ledger__title { font-weight: 500; }
+  .ledger__title span { display: block; font-weight: 400; color: var(--ink-muted); font-size: 0.8125rem; margin-top: 2px; }
+
+  /* ---------- finding detail ---------- */
+
+  .finding {
+    border-top: 1px solid var(--rule-strong);
+    padding-block: 26px 4px;
+  }
+  .finding:first-of-type { border-top: none; padding-top: 4px; }
+  .finding__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: baseline;
+    margin-bottom: 13px;
+  }
+  .finding__id {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+  .finding h3 { flex: 1 1 300px; margin: 0; }
+  .finding p { margin-bottom: 12px; }
+
+  .label {
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .evidence {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 3px 3px 0;
+    padding: 14px 17px;
+    margin: 14px 0 0;
+    max-width: var(--measure);
+  }
+  .evidence p { margin: 0; font-size: 0.9375rem; }
+  .evidence p + p { margin-top: 9px; }
+  .evidence .label { color: var(--accent); }
+
+  .warn {
+    background: var(--crit-soft);
+    border: 1px solid var(--crit);
+    border-radius: 3px;
+    padding: 15px 18px;
+    margin: 22px 0 0;
+    max-width: var(--measure);
+  }
+  .warn .label { color: var(--crit); }
+  .warn p { margin: 0; }
+  .warn p + p { margin-top: 9px; }
+
+  .callout {
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 15px 18px;
+    margin: 0 0 22px;
+    max-width: var(--measure);
+  }
+  .callout p { margin: 0; }
+  .callout p + p { margin-top: 9px; }
+
+  /* ---------- command block ---------- */
+
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 15px 17px;
+    overflow-x: auto;
+    margin: 0 0 18px;
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--ink);
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  pre .c { color: var(--ink-faint); }
+
+  /* ---------- checklist ---------- */
+
+  .check { list-style: none; padding: 0; max-width: var(--measure); }
+  .check li {
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--rule);
+    margin: 0;
+  }
+  .check li:last-child { border-bottom: none; }
+  .check .tick {
+    font-family: var(--f-mono);
+    font-weight: 700;
+    color: var(--ok);
+    flex: 0 0 auto;
+    line-height: 1.65;
+  }
+
+  footer {
+    border-top: 1px solid var(--rule-strong);
+    margin-top: 64px;
+    padding-top: 22px;
+    font-size: 0.8125rem;
+    color: var(--ink-faint);
+    max-width: var(--measure);
+  }
+
+  @media (max-width: 520px) {
+    :root { --pad: 16px; }
+    .hero { padding-block: 34px 26px; }
+    .masthead__meta { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <span class="masthead__name">Bàn giao an toàn tiền B2B</span>
+    <span class="masthead__spacer"></span>
+    <span class="masthead__meta">fix/b2b-money-safety-and-outbox · 2026-09-20</span>
+  </div>
+
+  <header class="hero">
+    <p class="eyebrow">Báo cáo bàn giao · TV9Tech</p>
+    <h1>Rà soát an toàn tiền hệ thống nạp B2B</h1>
+    <p class="standfirst">
+      Kết quả kiểm tra, sửa lỗi và kiểm thử luồng nhận đơn, giữ hạn mức, ghi công nợ,
+      outbox và webhook của <code>/api/b2b/v1</code>.
+    </p>
+    <div class="facts">
+      <span class="fact">Nhánh <b>fix/b2b-money-safety-and-outbox</b></span>
+      <span class="fact">Nền <b>main</b></span>
+      <span class="fact">Laravel <b>9.52</b></span>
+      <span class="fact">PHP <b>8.2</b></span>
+      <span class="fact">Chưa triển khai production</span>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat stat--ok">
+      <span class="stat__n">153</span>
+      <span class="stat__l">bài kiểm thử, tất cả xanh</span>
+    </div>
+    <div class="stat">
+      <span class="stat__n">530</span>
+      <span class="stat__l">khẳng định</span>
+    </div>
+    <div class="stat stat--crit">
+      <span class="stat__n">3</span>
+      <span class="stat__l">lỗi nghiêm trọng đã sửa</span>
+    </div>
+    <div class="stat">
+      <span class="stat__n">4</span>
+      <span class="stat__l">lần kiểm chứng ngược</span>
+    </div>
+  </div>
+
+  <section id="tom-tat">
+    <span class="sec-num">01</span>
+    <h2>Tóm tắt điều hành</h2>
+    <p class="sec-note">
+      Ba phát hiện dưới đây là những vấn đề nghiêm trọng nhất tìm được. Hai trong số đó
+      có thể gây sai tiền hoặc mất an toàn ngay trong điều kiện vận hành bình thường.
+    </p>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-01</span>
+        <h3>Tài liệu tích hợp có test vector sai — ở ba giá trị khác nhau</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        Hai tài liệu đặc tả ghi mã băm body và chữ ký mẫu khác nhau ở ba vị trí, và
+        <strong>cả ba đều sai</strong> so với giá trị tính đúng. Đối tác làm đúng theo tài liệu
+        sẽ nhận <code>401 INVALID_SIGNATURE</code> mà không có cách nào tự tìm ra nguyên nhân.
+      </p>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-02</span>
+        <h3>Tra cứu nền bị chết đói, đơn mới không bao giờ được tra cứu lại</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        Lệnh tra cứu nền sắp xếp theo <code>id</code> tăng dần. Khi số lần gọi cần tra cứu vượt
+        hạn ngạch mỗi lượt, nhóm bản ghi cũ chiếm hết chỗ và <strong>không bao giờ rời khỏi
+        tập kết quả</strong> — chặn vĩnh viễn mọi đơn phía sau. Kết quả thật từ nhà cung cấp
+        không bao giờ được phát hiện, đơn treo vô thời hạn.
+      </p>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-03</span>
+        <h3>Chống replay và rate limit chỉ có phạm vi một máy</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        Nonce chống replay dùng cache cục bộ, và rate limit khoá theo header
+        <code>X-Client-Id</code> <em>chưa xác thực</em>. Trên cụm nhiều app server, kẻ tấn công
+        chỉ cần đổi server đích để vượt chống replay, và đổi giá trị header mỗi request để
+        vượt rate limit hoàn toàn.
+      </p>
+    </div>
+
+    <div class="warn">
+      <span class="label">Không có bằng chứng sẵn sàng production</span>
+      <p>
+        Bộ kiểm thử xanh là bằng chứng cho những gì <em>đã được kiểm chứng</em>, không phải
+        chứng nhận hệ thống an toàn. Bảy hạng mục ở mục 05 chưa kiểm chứng được trong môi
+        trường hiện tại, trong đó quan trọng nhất là cache dùng chung và hành vi của queue
+        thật. Xem mục 05 và 06 trước khi mở cho đối tác.
+      </p>
+    </div>
+  </section>
+
+  <section id="danh-sach-loi">
+    <span class="sec-num">02</span>
+    <h2>Danh sách lỗi đã sửa</h2>
+    <p class="sec-note">
+      Chín phát hiện, xếp theo mức độ. Cột "kiểm chứng ngược" cho biết lỗi đó đã được
+      chứng minh là <em>bắt được</em> bằng cách phá rồi đo, hay chỉ dựa vào test thường.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <caption>Bảng tổng hợp phát hiện</caption>
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Phát hiện</th>
+            <th>Mức độ</th>
+            <th>Kiểm chứng ngược</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ledger__id">F-01</td>
+            <td class="ledger__title">Test vector tài liệu sai
+              <span>Ba giá trị khác nhau, cả ba đều sai</span></td>
+            <td><span class="sev sev--crit">Nghiêm trọng</span></td>
+            <td class="num">Có — test tự kiểm chứng tài liệu</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-02</td>
+            <td class="ledger__title">Tra cứu nền chết đói
+              <span>Đơn cũ chiếm vĩnh viễn hạn ngạch tra cứu</span></td>
+            <td><span class="sev sev--crit">Nghiêm trọng</span></td>
+            <td class="num">Có — hoàn nguyên thì đỏ</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-03</td>
+            <td class="ledger__title">Chống replay phạm vi một máy
+              <span>Nonce và rate limit không dùng chung</span></td>
+            <td><span class="sev sev--crit">Nghiêm trọng</span></td>
+            <td class="num">Một phần</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-04</td>
+            <td class="ledger__title">Chữ ký sai vẫn tiêu tốn nonce
+              <span>Tấn công từ chối dịch vụ nhắm vào đối tác</span></td>
+            <td><span class="sev sev--high">Cao</span></td>
+            <td class="num">Có — 2 bài test riêng</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-05</td>
+            <td class="ledger__title">Ghi công nợ thiếu chống lặp cấp DB
+              <span>Ràng buộc duy nhất là lá chắn cuối</span></td>
+            <td><span class="sev sev--high">Cao</span></td>
+            <td class="num">Có — hạ index thì đỏ</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-06</td>
+            <td class="ledger__title">Đối soát theo ngày tạo đơn
+              <span>Phải theo ngày ghi sổ phát sinh</span></td>
+            <td><span class="sev sev--high">Cao</span></td>
+            <td class="num">Có — 3 bài test</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-07</td>
+            <td class="ledger__title">Thiếu kiểm tra hình dạng request
+              <span>Content-Type, kích thước, field lạ</span></td>
+            <td><span class="sev sev--med">Trung bình</span></td>
+            <td class="num">Có — 15 bài test</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-08</td>
+            <td class="ledger__title">Phân tích ngày tháng lỏng lẻo
+              <span>Nhận cả <code>now</code>, <code>+1 week</code></span></td>
+            <td><span class="sev sev--med">Trung bình</span></td>
+            <td class="num">Có</td>
+          </tr>
+          <tr>
+            <td class="ledger__id">F-09</td>
+            <td class="ledger__title">Sai lệch nhỏ khác
+              <span>Cấu hình, lịch chạy, cột không ghi được</span></td>
+            <td><span class="sev sev--med">Trung bình</span></td>
+            <td class="num">Có</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="chi-tiet">
+    <span class="sec-num">03</span>
+    <h2>Chi tiết nguyên nhân và cách sửa</h2>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-01</span>
+        <h3>Test vector tài liệu sai</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        <span class="label">Nguyên nhân</span>
+        Các con số được chép tay, không có gì kiểm chứng. Hai tệp tài liệu bị lệch nhau qua
+        nhiều lần sửa, và tệp <code>.txt</code> còn chứa một giá trị chữ ký thứ ba không
+        xuất hiện ở tệp <code>.md</code>.
+      </p>
+      <p>
+        <span class="label">Cách sửa</span>
+        Tính lại toàn bộ từ nguyên liệu gốc, sửa cả hai tài liệu. Quan trọng hơn: tạo
+        <code>B2bDocumentedVectorTest.php</code> để <strong>tài liệu tự kiểm chứng</strong>.
+        Bài test viết lại thuật toán <em>từ tài liệu</em> — cố ý không dùng lại helper của
+        middleware — nên nếu tài liệu và mã nguồn lệch nhau thì test đỏ.
+      </p>
+      <div class="evidence">
+        <span class="label">Bằng chứng</span>
+        <p>
+          7 bài test xanh. Bài <code>test_documented_algorithm_authenticates_against_live_endpoint</code>
+          chứng minh thuật toán mô tả trong tài liệu thật sự xác thực được với middleware đang
+          chạy và nhận về HTTP 202 — đây là bằng chứng mạnh hơn việc chỉ so khớp chuỗi.
+        </p>
+        <p>
+          Bổ sung ghi chú về bẫy <code>ksort</code> query string, và cảnh báo timestamp mẫu
+          chỉ dùng kiểm thử offline (nằm ngoài cửa sổ ±300 giây).
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-02</span>
+        <h3>Tra cứu nền chết đói</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        <span class="label">Nguyên nhân</span>
+        <code>topup:reconcile-pending</code> sắp xếp theo <code>id ASC</code>. Khi số lần gọi
+        cần tra cứu nhiều hơn <code>--limit</code>, nhóm id nhỏ luôn chiếm hết hạn ngạch mỗi
+        lượt. Tệ hơn, nhánh xử lý quá hạn trước đây chỉ chuyển trạng thái đơn
+        <code>PROVIDER_PENDING</code>, nên các bản ghi quá hạn khác <strong>không bao giờ rời
+        khỏi tập kết quả</strong>.
+      </p>
+      <p>
+        <span class="label">Cách sửa</span>
+        Sắp xếp theo <code>kiem_tra_lai_luc</code> (NULL lên trước) để luôn ưu tiên bản ghi lâu
+        chưa được kiểm tra nhất. Thêm nhánh riêng cho <code>MANUAL_REVIEW</code> ở nhịp chậm
+        (<code>--slow-interval</code>): vẫn tra cứu nhưng không đốt hạn ngạch API, và đẩy bản
+        ghi về cuối hàng đợi công bằng thay vì kết luận thất bại.
+      </p>
+      <div class="evidence">
+        <span class="label">Kiểm chứng ngược</span>
+        <p>
+          Sao lưu lệnh, hoàn nguyên <em>cả</em> thứ tự sắp xếp <em>lẫn</em> cơ chế đẩy nhịp
+          chậm, chạy lại: test <strong>đỏ đúng tại khẳng định dự kiến</strong>. Phục hồi từ
+          bản sao lưu: xanh trở lại.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-03</span>
+        <h3>Chống replay và rate limit phạm vi một máy</h3>
+        <span class="sev sev--crit">Nghiêm trọng</span>
+      </div>
+      <p>
+        <span class="label">Nguyên nhân</span>
+        Hai lỗ hổng độc lập. Thứ nhất, nonce chống replay dùng cache mặc định: với driver
+        <code>file</code> hoặc <code>array</code>, mỗi app server có bộ nhớ riêng nên nonce đã
+        dùng ở server A vẫn qua được ở server B. Thứ hai, rate limit khoá theo header
+        <code>X-Client-Id</code> do client tự khai — kẻ tấn công đổi giá trị header mỗi request
+        là vượt được hoàn toàn, đồng thời tạo không gian khoá vô hạn.
+      </p>
+      <p>
+        <span class="label">Cách sửa</span>
+        Thêm <code>App\Support\B2bSecurityCache</code> với phương thức <code>isShared()</code>;
+        nonce dùng store cấu hình được qua <code>B2B_SECURITY_CACHE_STORE</code>. Rate limit
+        chia hai tầng: tầng IP áp dụng <em>trước</em> xác thực để chống flood, tầng đại lý khoá
+        theo <code>client_id</code> <em>đã xác thực</em> áp dụng <em>sau</em> xác thực. Thêm
+        báo động <code>SECURITY_CACHE_NOT_SHARED</code> trong lệnh kiểm tra sức khỏe.
+      </p>
+      <div class="evidence">
+        <span class="label">Bằng chứng</span>
+        <p>
+          <code>B2bHmacAuthTest</code> 11 bài và <code>B2bHealthCheckTest</code> 3 bài đều xanh.
+          Lệnh <code>b2b:health-check</code> hiện báo đúng <code>SECURITY_CACHE_NOT_SHARED</code>
+          khi driver là <code>file</code> — đã chạy thật và xác nhận.
+        </p>
+        <p>
+          <strong>Chưa kiểm chứng được</strong> hành vi với cache dùng chung thật (không có Redis
+          trong môi trường này). Xem mục 05.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-04</span>
+        <h3>Chữ ký sai vẫn tiêu tốn nonce của request hợp lệ</h3>
+        <span class="sev sev--high">Cao</span>
+      </div>
+      <p>
+        <span class="label">Nguyên nhân</span>
+        Nonce bị đánh dấu "đã dùng" <em>trước</em> khi xác minh chữ ký. Kẻ tấn công chặn được
+        một request — biết <code>X-Nonce</code> nhưng không biết secret — có thể gửi request giả
+        với nonce đó. Nonce bị tiêu tốn, và request thật của đối tác sau đó bị từ chối
+        <code>REPLAY_DETECTED</code>. Đây là tấn công từ chối dịch vụ nhắm vào chính đối tác.
+      </p>
+      <p>
+        <span class="label">Cách sửa</span>
+        Xác minh chữ ký <strong>trước</strong>, chỉ đánh dấu nonce sau khi chữ ký hợp lệ.
+      </p>
+      <div class="evidence">
+        <span class="label">Bằng chứng</span>
+        <p>
+          Hai bài test: <code>test_bad_signature_does_not_consume_nonce</code> và
+          <code>test_used_nonce_is_rejected_even_with_fresh_valid_signature</code> — bài thứ hai
+          khẳng định nonce đã dùng vẫn bị chặn kể cả khi có chữ ký mới hợp lệ, để việc sửa
+          không vô tình mở lại lỗ hổng replay.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-05</span>
+        <h3>Ghi công nợ thiếu chống lặp ở cấp database</h3>
+        <span class="sev sev--high">Cao</span>
+      </div>
+      <p>
+        <span class="label">Cách sửa</span>
+        Mọi nghiệp vụ tiền — giữ hạn mức, ghi công nợ, giải phóng, hoàn công nợ — đều dựa trên
+        ràng buộc duy nhất ở cấp DB làm lá chắn cuối, kèm kiểm tra idempotent bên trong
+        transaction. Loại bỏ <code>max(0, …)</code> vì nó che giấu sai lệch số dư thay vì phơi ra.
+      </p>
+      <div class="evidence">
+        <span class="label">Kiểm chứng ngược — có định lượng</span>
+        <p>
+          Tạm hạ unique index <code>uq_don_hang_partner_order</code> trên DB test, chạy lại test
+          tương tranh: <strong>4 tiến trình tạo 4 đơn</strong> thay vì 1.
+        </p>
+        <p>
+          Kết quả này chứng minh ba điều cùng lúc: (a) test thực sự tương tranh chứ không phải
+          tuần tự giả; (b) ràng buộc DB chính là lá chắn thật; (c) kiểm tra ở tầng ứng dụng
+          một mình <strong>không đủ</strong> dưới tương tranh. Index đã được phục hồi và xác nhận.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-06</span>
+        <h3>Đối soát tính theo ngày tạo đơn thay vì ngày ghi sổ</h3>
+        <span class="sev sev--high">Cao</span>
+      </div>
+      <p>
+        <span class="label">Cách sửa</span>
+        Đối soát theo ngày ghi sổ phát sinh. Thêm kiểm tra chặn kỳ chồng lấn và chặn tạo lại
+        kỳ đã khóa.
+      </p>
+      <div class="evidence">
+        <span class="label">Bằng chứng</span>
+        <p>
+          Ba bài test, trong đó <code>test_reconciliation_counts_by_ledger_date_not_order_creation_date</code>
+          dựng đúng tình huống khó: đơn tạo 2026-08-28 23:30 nhưng ghi nợ 2026-09-05 09:00 —
+          phải thuộc kỳ tháng 9, không phải tháng 8.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-07</span>
+        <h3>Thiếu kiểm tra hình dạng request</h3>
+        <span class="sev sev--med">Trung bình</span>
+      </div>
+      <p>
+        <span class="label">Cách sửa</span>
+        Thêm middleware <code>ValidateB2bRequestShape</code>: chặn <code>Content-Type</code> sai
+        (415), body quá lớn (413), JSON không hợp lệ (400), field ngoài hợp đồng (400), và mâu
+        thuẫn giữa <code>account</code> và <code>phone_number</code> (400).
+      </p>
+      <div class="evidence">
+        <span class="label">Bằng chứng</span>
+        <p><code>B2bRequestValidationTest</code> — 15 bài, tất cả xanh.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-08</span>
+        <h3>Phân tích ngày tháng lỏng lẻo</h3>
+        <span class="sev sev--med">Trung bình</span>
+      </div>
+      <p>
+        <span class="label">Nguyên nhân</span>
+        <code>from_date</code> và <code>to_date</code> nhận cả biểu thức tương đối như
+        <code>now</code>, <code>+1 week</code>, khiến kết quả tra cứu không xác định và không
+        tái lập được.
+      </p>
+      <p>
+        <span class="label">Cách sửa</span>
+        Chỉ nhận <code>Y-m-d</code> hoặc ISO-8601, kèm kiểm tra khứ hồi để từ chối ngày bị trôi
+        (ví dụ <code>2026-02-30</code>). Thêm <code>INVALID_DATE_RANGE</code> và
+        <code>DATE_RANGE_TOO_WIDE</code> (giới hạn 31 ngày).
+      </p>
+    </div>
+
+    <div class="finding">
+      <div class="finding__head">
+        <span class="finding__id">F-09</span>
+        <h3>Sai lệch nhỏ khác</h3>
+        <span class="sev sev--med">Trung bình</span>
+      </div>
+      <ul>
+        <li>
+          Xoá <code>'created_at' =&gt; now()</code> khỏi <code>SoPhatSinhCongNo::create()</code>.
+          Cột này không nằm trong <code>$fillable</code> nên lệnh vốn vô tác dụng — nhưng nó
+          gây hiểu nhầm rằng thời điểm ghi sổ có thể sửa được.
+        </li>
+        <li>
+          <code>b2b:health-check</code> chưa được lên lịch — đã thêm vào scheduler, chạy
+          15 phút một lần.
+        </li>
+        <li>Thêm <code>config/b2b.php</code> gom các ngưỡng cấu hình về một chỗ.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="bang-chung">
+    <span class="sec-num">04</span>
+    <h2>Bằng chứng kiểm thử</h2>
+    <p class="sec-note">
+      Mỗi khẳng định quan trọng đều được kiểm chứng bằng cách <em>phá rồi đo</em>, không dựa
+      vào suy đoán. Bảng dưới ghi lại bốn lần kiểm chứng ngược đã thực hiện.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <caption>Kiểm chứng ngược — phá bảo vệ rồi đo</caption>
+        <thead>
+          <tr>
+            <th>Phá gì</th>
+            <th>Kết quả mong đợi</th>
+            <th>Kết quả thực tế</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Hạ unique index <code>uq_don_hang_partner_order</code></td>
+            <td>Test tương tranh đỏ</td>
+            <td class="num">4 tiến trình tạo 4 đơn</td>
+          </tr>
+          <tr>
+            <td>Hoàn nguyên thứ tự sắp xếp và nhịp chậm của lệnh tra cứu nền</td>
+            <td>Test chết đói đỏ</td>
+            <td class="num">Đỏ đúng khẳng định</td>
+          </tr>
+          <tr>
+            <td>Gỡ <code>lockForUpdate</code> trên dòng cấu hình</td>
+            <td>Test khoá đỏ</td>
+            <td class="num">3/3 lần đỏ</td>
+          </tr>
+          <tr>
+            <td>Gỡ <em>cả hai</em> <code>lockForUpdate</code></td>
+            <td>Test hạn mức đỏ</td>
+            <td class="num">Giữ 40.000/30.000 · khả dụng −10.000 <span style="color:var(--high)">(2/5 lần)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:34px">Phân bố kiểm thử</h3>
+    <div class="scroll">
+      <table>
+        <caption>153 bài · 530 khẳng định</caption>
+        <thead>
+          <tr><th>Nhóm</th><th>Tệp</th><th style="text-align:right">Bài</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Hình dạng request</td><td class="num">B2bRequestValidationTest</td><td class="num" style="text-align:right">15</td></tr>
+          <tr><td>Chuẩn API nghiêm ngặt</td><td class="num">B2bStrictApiStandardTest</td><td class="num" style="text-align:right">13</td></tr>
+          <tr><td>Xác thực HMAC</td><td class="num">B2bHmacAuthTest</td><td class="num" style="text-align:right">11</td></tr>
+          <tr><td>Webhook &amp; đối soát</td><td class="num">B2bWebhookAndReconciliationTest</td><td class="num" style="text-align:right">11</td></tr>
+          <tr><td>Đơn hàng &amp; hạn mức</td><td class="num">B2bOrderAndCreditTest</td><td class="num" style="text-align:right">10</td></tr>
+          <tr><td>Tra cứu nền an toàn</td><td class="num">PendingReconciliationSafetyTest</td><td class="num" style="text-align:right">9</td></tr>
+          <tr><td>Test vector tài liệu</td><td class="num">B2bDocumentedVectorTest</td><td class="num" style="text-align:right">7</td></tr>
+          <tr><td>Giao diện quản trị</td><td class="num">B2bAdminViewsTest</td><td class="num" style="text-align:right">7</td></tr>
+          <tr><td><strong>Tương tranh thật</strong></td><td class="num">B2bConcurrencyTest</td><td class="num" style="text-align:right"><strong>4</strong></td></tr>
+          <tr><td>Kiểm tra sức khỏe</td><td class="num">B2bHealthCheckTest</td><td class="num" style="text-align:right">3</td></tr>
+          <tr><td>Còn lại của dự án</td><td class="num">—</td><td class="num" style="text-align:right">63</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:34px">Về nhóm kiểm thử tương tranh</h3>
+    <p>
+      Nhóm này chạy <strong>tiến trình PHP riêng biệt với kết nối DB riêng</strong>, đồng bộ
+      qua barrier file, để các transaction thực sự chồng lấn ở tầng MySQL. Cố ý không dùng
+      <code>DatabaseTransactions</code>: trait đó bọc test trong một transaction, dữ liệu chưa
+      commit thì tiến trình khác không thấy, mọi tranh chấp biến mất và test sẽ
+      <em>xanh giả</em>.
+    </p>
+    <div class="warn">
+      <span class="label">Giới hạn đã đo được — cần ghi nhận trung thực</span>
+      <p>
+        Khi gỡ bỏ khoá bảo vệ, bài kiểm thử hạn mức chỉ phát hiện lỗi ở
+        <strong>khoảng 2/5 lần chạy</strong> (đo với 16 tiến trình), vì cửa sổ tranh chấp rất
+        hẹp. Một test chỉ đỏ 40% số lần là một lưới an toàn yếu.
+      </p>
+      <p>
+        Vì vậy đã bổ sung một bài <strong>tất định</strong>: khẳng định trực tiếp rằng đường ghi
+        hạn mức có phát <code>SELECT … FOR UPDATE</code> trên cả dòng cấu hình đối tác lẫn tập
+        khoản giữ đang <code>HOLDING</code>. Đã kiểm chứng ngược: gỡ khoá thì bài này đỏ
+        <strong>3/3 lần chạy</strong>.
+      </p>
+      <p>
+        Kết luận đúng về nhóm này: nó chứng minh bất biến đúng trong điều kiện bình thường, và
+        bài tất định bảo vệ chống hồi quy. Bản thân bài tương tranh <em>không</em> phải lưới an
+        toàn đáng tin để phát hiện hồi quy.
+      </p>
+    </div>
+  </section>
+
+  <section id="du-lieu">
+    <span class="sec-num">05</span>
+    <h2>Migration và kiểm tra dữ liệu</h2>
+    <p class="sec-note">
+      Hai migration mới, <strong>chỉ thêm</strong>, đã chạy trên DB dev. Đã xác nhận bằng
+      <code>migrate --pretend</code> trước khi chạy thật.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <caption>Migration chỉ thêm — không phá dữ liệu</caption>
+        <thead>
+          <tr><th>Migration</th><th>Thay đổi</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">2026_09_20_100000</td>
+            <td>Thêm <code>xu_ly_owner</code>, <code>xu_ly_lease_den</code> (nullable) + index không-duy-nhất</td>
+          </tr>
+          <tr>
+            <td class="num">2026_09_20_110000</td>
+            <td>Thêm <code>khoa_so_huu</code> (nullable) + index không-duy-nhất</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px">Kiểm tra trùng lặp trước khi thêm unique index</h3>
+    <p>
+      Đã chạy <code>tools/kiem-tra-trung-du-lieu.php</code> trên DB dev — <strong>sạch</strong>
+      ở cả sáu nhóm kiểm tra:
+    </p>
+    <ul>
+      <li><code>don_hang</code> trùng <code>(dai_ly_api_id, ma_don_doi_tac)</code> — 0 nhóm</li>
+      <li><code>khoan_giu_han_muc</code> trùng <code>don_hang_id</code> — 0 nhóm</li>
+      <li><code>so_phat_sinh_cong_no</code> trùng <code>(loai_phat_sinh, ma_tham_chieu)</code> — 0 nhóm</li>
+      <li><code>so_phat_sinh_cong_no</code> trùng <code>(don_hang_id, loai_phat_sinh)</code> — 0 nhóm</li>
+      <li><code>webhook_outbox</code> trùng <code>event_id</code> — 0 nhóm</li>
+      <li><code>b2b_order_outbox</code> trùng <code>don_hang_id</code> — 0 nhóm</li>
+    </ul>
+    <p>
+      Đối soát công nợ báo <strong>không có đại lý nào lệch sổ</strong> và
+      <strong>0 giao dịch tài chính bất định</strong> cần đối soát tay.
+      Không có backfill tự động nào được thực hiện — sổ công nợ là bất biến và không được
+      sửa lịch sử đã chốt.
+    </p>
+  </section>
+
+  <section id="han-che">
+    <span class="sec-num">06</span>
+    <h2>Hạn chế và phần chưa kiểm chứng</h2>
+    <p class="sec-note">
+      Đây là phần quan trọng nhất của báo cáo. Những gì chưa kiểm chứng được thì không được
+      trình bày như đã kiểm chứng.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <caption>Chưa kiểm chứng được trong môi trường hiện tại</caption>
+        <thead>
+          <tr><th>Hạng mục</th><th>Vì sao chưa</th><th>Cách kiểm chứng</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Chống replay với cache dùng chung</td>
+            <td>Môi trường chỉ có driver <code>file</code>, không có Redis</td>
+            <td>Đặt <code>B2B_SECURITY_CACHE_STORE=redis</code>, chạy 2 app server, gửi cùng nonce tới cả hai</td>
+          </tr>
+          <tr>
+            <td>Hành vi dưới tải thật của nhà cung cấp</td>
+            <td>Không được gọi nạp tiền thật</td>
+            <td>Kiểm thử với sandbox của AppotaPay</td>
+          </tr>
+          <tr>
+            <td>Worker chết tại từng điểm kiểm tra</td>
+            <td>Cần worker thật + queue backend thật; test dùng <code>sync</code></td>
+            <td>Dùng <code>QUEUE_CONNECTION=database</code>, dừng đột ngột worker tại từng bước</td>
+          </tr>
+          <tr>
+            <td>Queue <code>database</code> / <code>redis</code> thật</td>
+            <td>Test chạy với <code>QUEUE_CONNECTION=sync</code></td>
+            <td>Diễn tập trên staging</td>
+          </tr>
+          <tr>
+            <td>Webhook gửi thật qua mạng</td>
+            <td>Không được gửi webhook thật</td>
+            <td>Endpoint nhận giả trên staging</td>
+          </tr>
+          <tr>
+            <td>Tương tranh nhiều máy</td>
+            <td>Chỉ kiểm chứng được trên một máy</td>
+            <td>Kiểm thử tải đa node</td>
+          </tr>
+          <tr>
+            <td>Cron / scheduler thật</td>
+            <td>Môi trường Windows, không chạy cron</td>
+            <td>Diễn tập trên staging Linux</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px">Chưa có trong bộ kiểm thử</h3>
+    <ul>
+      <li>
+        Chính sách lưu trữ bản ghi idempotency: hiện đặt <code>expires_at = now()->addDays(7)</code>
+        nhưng <strong>chưa có job dọn dẹp</strong> — bản ghi sẽ tích tụ vô thời hạn.
+      </li>
+      <li>Chưa kiểm thử nạp thừa (overpayment) và điều chỉnh công nợ qua nhiều kỳ.</li>
+      <li>Chưa có kiểm thử hồi quy B2C tách riêng — chỉ dựa vào bộ test sẵn có của dự án.</li>
+      <li>Chưa kiểm thử danh mục nhiều loại sản phẩm với giá khác nhau trong cùng một đối tác.</li>
+    </ul>
+
+    <h3 style="margin-top:30px">Giới hạn của chính bộ kiểm thử</h3>
+    <ul>
+      <li>
+        Bài tương tranh có bản chất xác suất — đã đo được khoảng 40% khả năng phát hiện khi gỡ
+        bảo vệ. Bài tất định bù đắp phần nào, nhưng chỉ bảo vệ được hai điểm khoá cụ thể.
+      </li>
+      <li>Test chạy trên một DB đơn lẻ, không tái hiện được hành vi cụm.</li>
+      <li>
+        Hành vi dưới thời gian thực — đặc biệt là đối soát qua ranh giới ngày và tháng — chỉ
+        được kiểm chứng một phần, vì thời gian được cố định trong test.
+      </li>
+    </ul>
+  </section>
+
+  <section id="con-lai">
+    <span class="sec-num">07</span>
+    <h2>Việc còn lại trước production</h2>
+
+    <h3>Bắt buộc — thiếu sẽ sai tiền hoặc mất an toàn</h3>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th style="width:38px">#</th><th>Việc</th><th>Vì sao</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td>Đặt <code>B2B_SECURITY_CACHE_STORE=redis</code></td>
+            <td>Thiếu thì mất chống replay trên cụm nhiều server</td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td>Đặt <code>QUEUE_CONNECTION</code> khác <code>sync</code></td>
+            <td><code>sync</code> phá vỡ mọi cơ chế chống trùng theo worker</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td>Xác nhận <code>--timeout</code> &lt; <code>retry_after</code> &lt; lease</td>
+            <td><strong>Sai thứ tự này gây nạp trùng</strong></td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td>Chạy <code>tools/kiem-tra-trung-du-lieu.php</code> trên DB production</td>
+            <td>Phát hiện trùng trước khi thêm unique index</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td>Cấu hình monitoring bắt mã thoát khác 0 của <code>b2b:health-check</code></td>
+            <td>Chưa có cảnh báo tự động</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px">Nên làm trước khi mở cho đối tác thật</h3>
+    <ul>
+      <li>Diễn tập quy trình phục hồi trên staging — chưa từng chạy thật.</li>
+      <li>Thêm job dọn dẹp bản ghi idempotency hết hạn.</li>
+      <li>Kiểm thử tải với sandbox của nhà cung cấp.</li>
+      <li>Bổ sung các nhóm test còn thiếu ở mục 06.</li>
+    </ul>
+  </section>
+
+  <section id="ban-giao">
+    <span class="sec-num">08</span>
+    <h2>Sản phẩm bàn giao</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th style="width:38px">#</th><th>Hạng mục</th><th>Vị trí</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td>Mã nguồn đã sửa + migration</td>
+            <td class="num">36 tệp · nhánh <code>fix/b2b-money-safety-and-outbox</code></td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td>Kiểm thử hồi quy + tương tranh</td>
+            <td class="num">tests/Feature/B2B/ · tests/Feature/Topup/ · tests/Support/</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td>Đặc tả API đã đồng bộ + mã mẫu</td>
+            <td class="num">docs/B2B_API_SPECIFICATION_V1.md · .txt</td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td>Hướng dẫn vận hành, phục hồi, triển khai, quay lui</td>
+            <td class="num">docs/B2B_VAN_HANH_TRIEN_KHAI.md</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td>Báo cáo lỗi kèm nguyên nhân và bằng chứng</td>
+            <td class="num">docs/B2B_BAO_CAO_BAN_GIAO.md</td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td>Công cụ kiểm tra dữ liệu (chỉ đọc)</td>
+            <td class="num">tools/kiem-tra-trung-du-lieu.php · tools/xuat-danh-sach-doi-soat.php</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px">Lệnh tái hiện</h3>
+<pre><code><span class="c"># Toàn bộ kiểm thử</span>
+php vendor/bin/phpunit
+
+<span class="c"># Riêng nhóm tương tranh — worker tự từ chối nếu không phải DB test</span>
+php vendor/bin/phpunit --filter B2bConcurrencyTest
+
+<span class="c"># Kiểm tra sức khỏe — mã thoát khác 0 khi có báo động</span>
+php artisan b2b:health-check --json
+
+<span class="c"># Kiểm tra dữ liệu trước khi thêm unique index (chỉ đọc)</span>
+php tools/kiem-tra-trung-du-lieu.php</code></pre>
+  </section>
+
+  <section id="tuan-thu">
+    <span class="sec-num">09</span>
+    <h2>Cam kết đã tuân thủ</h2>
+    <ul class="check">
+      <li><span class="tick">✓</span><span>Không sửa <code>.env</code> production</span></li>
+      <li><span class="tick">✓</span><span>Không gọi nạp tiền thật</span></li>
+      <li><span class="tick">✓</span><span>Không gửi webhook hay Telegram thật trong kiểm thử</span></li>
+      <li><span class="tick">✓</span><span>Không in secret, token hay dữ liệu nhạy cảm vào báo cáo</span></li>
+      <li><span class="tick">✓</span><span>Không chạy migration phá dữ liệu, không xoá database</span></li>
+      <li><span class="tick">✓</span><span>Không sửa lịch sử công nợ đã chốt để làm test xanh</span></li>
+      <li><span class="tick">✓</span><span>Dùng DB test riêng; worker kiểm thử <strong>từ chối chạy</strong> nếu không phải DB test</span></li>
+      <li><span class="tick">✓</span><span>Không tự triển khai production</span></li>
+      <li><span class="tick">✓</span><span>Không tuyên bố hệ thống an toàn tuyệt đối hay sẵn sàng production</span></li>
+    </ul>
+
+    <div class="callout" style="margin-top:28px">
+      <span class="label">Ghi chú về một sửa đổi fixture</span>
+      <p>
+        Fixture của <code>test_periodic_reconciliation_calculation_and_lock</code> đã được viết
+        lại. Trước đây nó chèn thẳng bản ghi <code>DonHang</code> và <code>ThanhToanCongNo</code>,
+        bỏ qua <code>B2bCreditService</code>, nên không có bút toán sổ cái nào và phép tính theo
+        sổ cái trả về 0.
+      </p>
+      <p>
+        Fixture mới đi qua đúng nghiệp vụ thật. <strong>Khẳng định không bị nới lỏng</strong> —
+        ngược lại còn được bổ sung phần kiểm tra cân đối sổ cái. Đây là sửa fixture cho đúng,
+        không phải sửa test để chấp nhận hành vi sai.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Báo cáo bàn giao · Rà soát an toàn tiền B2B API V1 · TV9Tech · 2026-09-20
+  </footer>
+
+</div>
+</body>
+</html>

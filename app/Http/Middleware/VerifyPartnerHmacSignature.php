@@ -3,9 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\CauHinhApiDaiLy;
+use App\Support\B2bSecurityCache;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyPartnerHmacSignature
@@ -150,8 +150,12 @@ class VerifyPartnerHmacSignature
         }
 
         // 9. CHỈ CLAIM NONCE SAU KHI CHỮ KÝ ĐÃ HỢP LỆ (Bảo vệ chống kẻ xấu chiếm nonce của đại lý)
+        //
+        // Nonce phải được ghi vào cache DÙNG CHUNG giữa các app server. Với cache cục bộ
+        // theo máy (file/array), một nonce đã dùng ở server A vẫn qua được ở server B.
+        // Xem config/b2b.php và `php artisan b2b:health-check`.
         $nonceCacheKey = "b2b_nonce:{$daiLy->id}:{$nonce}";
-        if (!Cache::add($nonceCacheKey, 1, self::NONCE_TTL_SECONDS)) {
+        if (!B2bSecurityCache::store()->add($nonceCacheKey, 1, self::NONCE_TTL_SECONDS)) {
             return response()->json([
                 'success' => false,
                 'error_code' => 'REPLAY_DETECTED',

@@ -671,4 +671,77 @@ class PendingReconciliationSafetyTest extends TestCase
         $this->assertEquals(TrangThaiDonHang::MANUAL_REVIEW->value, $donHangExpired->fresh()->trang_thai_don_hang);
         $this->assertEquals('cho_doi_soat', $donHangExpired->fresh()->trang_thai_doi_soat);
     }
+
+    /**
+     * Chống "chết đói" (starvation) trong hàng đợi tra cứu nền.
+     *
+     * Trước đây command sắp xếp theo id tăng dần và các lần gọi của đơn đã quá hạn
+     * (đã ở MANUAL_REVIEW) không bao giờ rời khỏi tập kết quả: mỗi lượt chúng chiếm
+     * hết slot của limit, nên các đơn phía sau KHÔNG BAO GIỜ được tra cứu.
+     *
+     * Nay mỗi lần gọi đã xử lý đều được đẩy kiem_tra_lai_luc lên hiện tại, đưa nó về
+     * cuối hàng đợi công bằng, nên lượt quét sau sẽ phục vụ được các đơn còn lại.
+     */
+    public function test_reconcile_pending_does_not_starve_orders_behind_expired_manual_review_calls(): void
+    {
+        Queue::fake();
+
+        $taoDon = function (string $trangThai, string $hauTo) {
+            return DonHang::create([
+                'ma_don_hang' => 'ORD_STARVE_' . $hauTo . '_' . Str::random(6),
+                'nguon_don' => 'b2b',
+                'dai_ly_api_id' => $this->partner->id,
+                'ma_don_doi_tac' => 'REF_STARVE_' . $hauTo . '_' . Str::random(6),
+                'dich_vu_id' => $this->dichVu->id,
+                'loai_san_pham_id' => $this->loaiSp->id,
+                'san_pham_id' => $this->product->id,
+                'tai_khoan_nhan' => '0988' . random_int(100000, 999999),
+                'menh_gia' => 20000,
+                'gia_ban' => 19500,
+                'gia_von' => 19000,
+                'phuong_thuc_thanh_toan' => 'cong_no',
+                'trang_thai_thanh_toan' => 'chua_thanh_toan',
+                'trang_thai_don_hang' => $trangThai,
+            ]);
+        };
+
+        $taoCall = function (DonHang $don, string $hauTo, ?Carbon $batDauLuc) {
+            return LanGoiNhaCungCap::create([
+                'don_hang_id' => $don->id,
+                'nha_cung_cap_id' => $this->ncc->id,
+                'ket_noi_nha_cung_cap_id' => $this->connection->id,
+                'partner_ref_id' => 'PREF_STARVE_' . $hauTo . '_' . Str::random(6),
+                'loai_yeu_cau' => 'CHARGING',
+                'trang_thai' => 'UNKNOWN_OR_PENDING',
+                'ket_qua_xac_dinh' => 'UNKNOWN_OR_PENDING',
+                'bat_dau_luc' => $batDauLuc,
+                'kiem_tra_lai_luc' => null,
+            ]);
+        };
+
+        // Hai lần gọi của đơn ĐÃ quá hạn và đã ở MANUAL_REVIEW, id nhỏ (đứng đầu hàng đợi)
+        $callManual1 = $taoCall($taoDon(TrangThaiDonHang::MANUAL_REVIEW->value, 'M1'), 'M1', now()->subHours(30));
+        $callManual2 = $taoCall($taoDon(TrangThaiDonHang::MANUAL_REVIEW->value, 'M2'), 'M2', now()->subHours(30));
+
+        // Một lần gọi của đơn CÒN trong thời hạn tra cứu, id lớn (đứng sau hàng đợi)
+        $callPending = $taoCall($taoDon(TrangThaiDonHang::PROVIDER_PENDING->value, 'P1'), 'P1', now()->subMinutes(10));
+
+        $options = ['--limit' => 2, '--max-hours' => 24, '--min-interval' => 60, '--slow-interval' => 3600];
+
+        // Lượt 1: hai lần gọi MANUAL_REVIEW quá hạn chiếm hết 2 slot của limit
+        Artisan::call('topup:reconcile-pending', $options);
+
+        Queue::assertPushed(CheckMobileTopupStatusJob::class, fn($job) => $job->lanGoiNhaCungCapId === $callManual1->id);
+        Queue::assertPushed(CheckMobileTopupStatusJob::class, fn($job) => $job->lanGoiNhaCungCapId === $callManual2->id);
+
+        // Lượt 2: đơn PROVIDER_PENDING phải được phục vụ, không bị chặn vĩnh viễn
+        Queue::fake();
+
+        Artisan::call('topup:reconcile-pending', $options);
+
+        Queue::assertPushed(
+            CheckMobileTopupStatusJob::class,
+            fn($job) => $job->lanGoiNhaCungCapId === $callPending->id
+        );
+    }
 }

@@ -195,6 +195,44 @@ class B2bHmacAuthTest extends TestCase
             ]);
     }
 
+    /**
+     * Chữ ký sai TUYỆT ĐỐI không được tiêu thụ nonce.
+     *
+     * Nếu middleware claim nonce trước khi xác minh chữ ký, kẻ tấn công chỉ cần gửi
+     * một request với chữ ký rác kèm nonce đoán được là có thể chặn vĩnh viễn request
+     * hợp lệ của đại lý (tấn công từ chối dịch vụ bằng cách đốt nonce).
+     */
+    public function test_bad_signature_does_not_consume_nonce(): void
+    {
+        $uri = '/api/b2b/v1/credit';
+        $nonce = 'nonce_khong_duoc_tieu_thu_' . Str::random(8);
+
+        // 1. Kẻ tấn công gửi request với chữ ký sai, dùng đúng nonce mà đại lý sắp dùng
+        $attack = $this->getJson($uri, $this->signHeaders('GET', $uri, '', null, $nonce, 'wrong_secret'));
+        $attack->assertStatus(401)->assertJson(['error_code' => 'INVALID_SIGNATURE']);
+
+        // 2. Đại lý gửi request HỢP LỆ với chính nonce đó -> phải được chấp nhận
+        $legit = $this->getJson($uri, $this->signHeaders('GET', $uri, '', null, $nonce));
+        $legit->assertStatus(200)->assertJson(['success' => true]);
+    }
+
+    /**
+     * Nonce đã dùng thì bị chặn kể cả khi request mới có timestamp và chữ ký hoàn toàn
+     * hợp lệ — đây chính là định nghĩa của chống phát lại.
+     */
+    public function test_used_nonce_is_rejected_even_with_fresh_valid_signature(): void
+    {
+        $uri = '/api/b2b/v1/credit';
+        $nonce = 'nonce_phat_lai_' . Str::random(8);
+
+        $first = $this->getJson($uri, $this->signHeaders('GET', $uri, '', null, $nonce));
+        $first->assertStatus(200);
+
+        // Request thứ hai: timestamp mới, chữ ký mới hợp lệ, nhưng dùng lại nonce cũ
+        $replay = $this->getJson($uri, $this->signHeaders('GET', $uri, '', time() + 1, $nonce));
+        $replay->assertStatus(401)->assertJson(['error_code' => 'REPLAY_DETECTED']);
+    }
+
     public function test_key_rotation_grace_period_accepts_previous_key(): void
     {
         $oldSecret = $this->secret;

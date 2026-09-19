@@ -11,6 +11,7 @@ use App\Models\SoPhatSinhCongNo;
 use App\Models\ThanhToanCongNo;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class B2bCreditService
@@ -90,14 +91,18 @@ class B2bCreditService
     /**
      * Chốt công nợ khi đơn hàng B2B thành công:
      * Chuyển khoản giữ sang COMMITTED và ghi tăng sổ phát sinh công nợ.
+     *
+     * @return bool true nếu công nợ đã được ghi nhận (hoặc đã ghi nhận trước đó),
+     *              false nếu phát hiện mâu thuẫn dữ liệu cần đối soát thủ công.
+     *              Khi trả về false, TUYỆT ĐỐI không có thay đổi tiền nào được thực hiện.
      */
-    public function chotCongNoThanhCong(DonHang $donHang): void
+    public function chotCongNoThanhCong(DonHang $donHang): bool
     {
         if (!$donHang->dai_ly_api_id) {
-            return;
+            return true;
         }
 
-        DB::transaction(function () use ($donHang) {
+        return DB::transaction(function () use ($donHang) {
             // 1. Kiểm tra xem bút toán chốt công nợ đã tồn tại chưa (Idempotent)
             $maThamChieu = 'TX-ORD-' . $donHang->id;
             $existingLedger = SoPhatSinhCongNo::where('dai_ly_api_id', $donHang->dai_ly_api_id)
@@ -106,23 +111,28 @@ class B2bCreditService
                 ->first();
 
             if ($existingLedger) {
-                return;
+                return true;
             }
 
             $hold = KhoanGiuHanMuc::where('don_hang_id', $donHang->id)
                 ->lockForUpdate()
                 ->first();
 
-            // Nếu đã commit trước đó hoặc đã release thì không tự ý commit đè
             if ($hold && $hold->trang_thai === 'COMMITTED') {
-                return;
+                return true;
             }
 
+            // 2. Mâu thuẫn nghiêm trọng: khoản giữ đã được giải phóng (đã kết luận đơn thất bại)
+            //    nhưng NCC lại báo thành công. KHÔNG được tự ý commit lại khoản giữ, KHÔNG được
+            //    tự tăng công nợ — phải để kế toán đối soát và ra quyết định.
             if ($hold && $hold->trang_thai === 'RELEASED') {
-                \Illuminate\Support\Facades\Log::warning("B2bCreditService: Khoản giữ đơn #{$donHang->id} đã RELEASED trước đó nhưng nhận tín hiệu thành công muộn. Cần kiểm tra đối soát.", [
-                    'don_hang_id' => $donHang->id,
-                    'dai_ly_api_id' => $donHang->dai_ly_api_id,
-                ]);
+                return $this->baoDongMauThuan($donHang, $hold, 'Khoản giữ đã RELEASED nhưng nhận tín hiệu thành công từ NCC.');
+            }
+
+            // 3. Mâu thuẫn dữ liệu: đơn B2B thành công nhưng không có khoản giữ nào.
+            //    Không được tự tạo khoản giữ để che giấu dữ liệu thiếu.
+            if (!$hold) {
+                return $this->baoDongMauThuan($donHang, null, 'Đơn B2B thành công nhưng không tìm thấy khoản giữ hạn mức nào.');
             }
 
             $cauHinh = CauHinhApiDaiLy::where('dai_ly_api_id', $donHang->dai_ly_api_id)
@@ -138,20 +148,10 @@ class B2bCreditService
             $cauHinh->save();
 
             // Chốt khoản giữ
-            if ($hold) {
-                $hold->update([
-                    'trang_thai' => 'COMMITTED',
-                    'chot_cong_no_luc' => now(),
-                ]);
-            } else {
-                KhoanGiuHanMuc::create([
-                    'dai_ly_api_id' => $donHang->dai_ly_api_id,
-                    'don_hang_id' => $donHang->id,
-                    'so_tien_giu' => $soTien,
-                    'trang_thai' => 'COMMITTED',
-                    'chot_cong_no_luc' => now(),
-                ]);
-            }
+            $hold->update([
+                'trang_thai' => 'COMMITTED',
+                'chot_cong_no_luc' => now(),
+            ]);
 
             // Ghi sổ cái phát sinh công nợ (Immutable ledger)
             SoPhatSinhCongNo::create([
@@ -163,9 +163,45 @@ class B2bCreditService
                 'so_du_truoc' => $soDuTruoc,
                 'so_du_sau' => $soDuSau,
                 'ghi_chu' => "Ghi nhận công nợ đơn hàng #{$donHang->ma_don_hang} (Đối tác ref: {$donHang->ma_don_doi_tac})",
-                'created_at' => now(),
             ]);
+
+            return true;
         });
+    }
+
+    /**
+     * Đánh dấu đơn cần đối soát thủ công và cảnh báo vận hành khi phát hiện mâu thuẫn
+     * giữa khoản giữ và kết quả nhà cung cấp. Không thay đổi bất kỳ số dư nào.
+     */
+    protected function baoDongMauThuan(DonHang $donHang, ?KhoanGiuHanMuc $hold, string $lyDo): bool
+    {
+        $chiTiet = [
+            'don_hang_id' => $donHang->id,
+            'ma_don_hang' => $donHang->ma_don_hang,
+            'dai_ly_api_id' => $donHang->dai_ly_api_id,
+            'trang_thai_khoan_giu' => $hold?->trang_thai,
+            'so_tien' => (float) $donHang->gia_ban,
+            'ly_do' => $lyDo,
+        ];
+
+        Log::emergency('B2bCreditService: MÂU THUẪN CÔNG NỢ B2B — cần đối soát thủ công. Không tự động thay đổi tiền.', $chiTiet);
+
+        // Đánh dấu đơn cần đối soát (không đổi trạng thái đơn, không đổi tiền)
+        if ($donHang->trang_thai_doi_soat !== 'cho_doi_soat') {
+            $donHang->update(['trang_thai_doi_soat' => 'cho_doi_soat']);
+        }
+
+        try {
+            app(\App\Services\Alert\TelegramAlertService::class)->alertManualReview(
+                $donHang,
+                "MÂU THUẪN CÔNG NỢ B2B: đơn #{$donHang->ma_don_hang} — {$lyDo} Hệ thống KHÔNG tự thay đổi công nợ, cần kế toán đối soát thủ công."
+            );
+        } catch (\Throwable $e) {
+            // Lỗi thông báo không được làm hỏng kết quả nghiệp vụ
+            Log::warning('B2bCreditService: không gửi được cảnh báo Telegram: ' . $e->getMessage());
+        }
+
+        return false;
     }
 
     /**
@@ -232,7 +268,35 @@ class B2bCreditService
                 ->firstOrFail();
 
             $soTien = (float) $donHang->gia_ban;
+
+            // Chống hoàn vượt quá số tiền đã ghi nợ của chính đơn hàng gốc
+            if ($soTien > (float) $originalLedger->so_tien) {
+                throw new DomainException(
+                    sprintf(
+                        'Số tiền hoàn (%s) vượt quá số tiền đã ghi nợ của đơn hàng gốc (%s).',
+                        number_format($soTien, 2, '.', ''),
+                        number_format((float) $originalLedger->so_tien, 2, '.', '')
+                    ),
+                    422
+                );
+            }
+
             $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
+
+            // Không để hoàn tiền biến dư nợ thành số dư có ngoài ý muốn.
+            // Trường hợp dư nợ hiện tại nhỏ hơn số tiền hoàn (đại lý đã thanh toán một phần)
+            // phải xử lý bằng bút toán điều chỉnh có người phê duyệt, không tự động ở đây.
+            if ($soTien > $soDuTruoc) {
+                throw new DomainException(
+                    sprintf(
+                        'Không thể hoàn công nợ: số tiền hoàn (%s) vượt quá dư nợ hiện tại (%s). Cần đối soát và ghi bút toán điều chỉnh có phê duyệt.',
+                        number_format($soTien, 2, '.', ''),
+                        number_format($soDuTruoc, 2, '.', '')
+                    ),
+                    422
+                );
+            }
+
             $soDuSau = $soDuTruoc - $soTien;
 
             $cauHinh->cong_no_hien_tai = $soDuSau;
@@ -248,13 +312,18 @@ class B2bCreditService
                 'so_du_sau' => $soDuSau,
                 'ghi_chu' => "Hoàn tiền giảm công nợ đơn hàng #{$donHang->ma_don_hang}: {$lyDo}",
                 'nguoi_tao_id' => $nguoiThaoTacId,
-                'created_at' => now(),
             ]);
         });
     }
 
     /**
      * Ghi nhận thanh toán từ đại lý (chuyển khoản trả nợ).
+     *
+     * Chính sách thanh toán dư: MẶC ĐỊNH TỪ CHỐI. Trước đây hệ thống dùng
+     * max(0, số dư - số tiền) khiến phần thanh toán vượt dư nợ bị âm thầm nuốt mất,
+     * đồng thời làm số dư tổng hợp lệch khỏi sổ phát sinh.
+     * Chỉ khi đối tác vận hành chủ động bật $choPhepGhiNhanSoDuCo thì phần vượt mới
+     * được ghi nhận thành số dư có (công nợ âm) và phản ánh đầy đủ trên sổ cái.
      */
     public function ghiNhanThanhToan(
         DaiLyApi $daiLy,
@@ -263,12 +332,30 @@ class B2bCreditService
         ?string $maGiaoDichNganHang = null,
         ?string $ghiChu = null,
         ?int $nguoiTaoId = null,
-        ?string $maThanhToan = null
+        ?string $maThanhToan = null,
+        bool $choPhepGhiNhanSoDuCo = false
     ): ThanhToanCongNo {
-        return DB::transaction(function () use ($daiLy, $soTien, $phuongThuc, $maGiaoDichNganHang, $ghiChu, $nguoiTaoId, $maThanhToan) {
+        if ($soTien <= 0) {
+            throw new DomainException('Số tiền thanh toán phải lớn hơn 0.', 422);
+        }
+
+        return DB::transaction(function () use ($daiLy, $soTien, $phuongThuc, $maGiaoDichNganHang, $ghiChu, $nguoiTaoId, $maThanhToan, $choPhepGhiNhanSoDuCo) {
             $cauHinh = CauHinhApiDaiLy::where('dai_ly_api_id', $daiLy->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
+
+            if ($soTien > $soDuTruoc && !$choPhepGhiNhanSoDuCo) {
+                throw new DomainException(
+                    sprintf(
+                        'Số tiền thanh toán (%s) vượt quá dư nợ hiện tại (%s). Vui lòng kiểm tra lại hoặc bật chính sách ghi nhận số dư có.',
+                        number_format($soTien, 2, '.', ''),
+                        number_format($soDuTruoc, 2, '.', '')
+                    ),
+                    422
+                );
+            }
 
             $maTT = $maThanhToan ?: 'PAY-' . date('YmdHis') . '-' . strtoupper(Str::random(6));
 
@@ -284,11 +371,15 @@ class B2bCreditService
                 'nguoi_tao_id' => $nguoiTaoId,
             ]);
 
-            $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
-            $soDuSau = max(0.0, $soDuTruoc - $soTien);
+            $soDuSau = $soDuTruoc - $soTien;
 
             $cauHinh->cong_no_hien_tai = $soDuSau;
             $cauHinh->save();
+
+            $ghiChuSoCai = "Thanh toán công nợ: {$maTT}" . ($maGiaoDichNganHang ? " (Ref: {$maGiaoDichNganHang})" : '');
+            if ($soDuSau < 0) {
+                $ghiChuSoCai .= sprintf(' [GHI NHẬN SỐ DƯ CÓ: thanh toán vượt dư nợ %s]', number_format(abs($soDuSau), 2, '.', ''));
+            }
 
             // Ghi sổ cái
             SoPhatSinhCongNo::create([
@@ -299,7 +390,7 @@ class B2bCreditService
                 'so_du_truoc' => $soDuTruoc,
                 'so_du_sau' => $soDuSau,
                 'ma_tham_chieu' => 'TX-PAY-' . $payment->ma_thanh_toan,
-                'ghi_chu' => "Thanh toán công nợ: {$maTT}" . ($maGiaoDichNganHang ? " (Ref: {$maGiaoDichNganHang})" : ''),
+                'ghi_chu' => $ghiChuSoCai,
                 'nguoi_tao_id' => $nguoiTaoId,
             ]);
 
@@ -309,6 +400,7 @@ class B2bCreditService
 
     /**
      * Ghi nhận bút toán điều chỉnh công nợ.
+     * Không dùng max(0, ...) để âm thầm cắt bớt phần điều chỉnh giảm vượt dư nợ.
      */
     public function ghiNhanDieuChinh(
         DaiLyApi $daiLy,
@@ -319,10 +411,31 @@ class B2bCreditService
         ?int $kyDoiSoatId = null,
         ?int $nguoiTaoId = null
     ): DieuChinhCongNo {
+        if (!in_array($loaiDieuChinh, ['TANG_NO', 'GIAM_NO'], true)) {
+            throw new DomainException("Loại điều chỉnh '{$loaiDieuChinh}' không hợp lệ (chỉ chấp nhận TANG_NO hoặc GIAM_NO).", 422);
+        }
+
+        if ($soTien <= 0) {
+            throw new DomainException('Số tiền điều chỉnh phải lớn hơn 0.', 422);
+        }
+
         return DB::transaction(function () use ($daiLy, $loaiDieuChinh, $soTien, $lyDo, $maThamChieuGoc, $kyDoiSoatId, $nguoiTaoId) {
             $cauHinh = CauHinhApiDaiLy::where('dai_ly_api_id', $daiLy->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
+
+            if ($loaiDieuChinh === 'GIAM_NO' && $soTien > $soDuTruoc) {
+                throw new DomainException(
+                    sprintf(
+                        'Số tiền điều chỉnh giảm (%s) vượt quá dư nợ hiện tại (%s). Không thể ghi nhận.',
+                        number_format($soTien, 2, '.', ''),
+                        number_format($soDuTruoc, 2, '.', '')
+                    ),
+                    422
+                );
+            }
 
             $maDC = 'ADJ-' . date('YmdHis') . '-' . strtoupper(Str::random(6));
 
@@ -338,10 +451,9 @@ class B2bCreditService
                 'created_at' => now(),
             ]);
 
-            $soDuTruoc = (float) $cauHinh->cong_no_hien_tai;
             $soDuSau = ($loaiDieuChinh === 'TANG_NO')
                 ? ($soDuTruoc + $soTien)
-                : max(0.0, $soDuTruoc - $soTien);
+                : ($soDuTruoc - $soTien);
 
             $cauHinh->cong_no_hien_tai = $soDuSau;
             $cauHinh->save();
@@ -362,5 +474,54 @@ class B2bCreditService
 
             return $adjustment;
         });
+    }
+
+    /**
+     * Kiểm tra tính cân đối giữa số dư tổng hợp (cau_hinh_api_dai_ly.cong_no_hien_tai)
+     * và sổ phát sinh công nợ bất biến (so_phat_sinh_cong_no).
+     *
+     * Bất biến nghiệp vụ:
+     *   cong_no_hien_tai == SUM(TANG_*) - SUM(GIAM_*)
+     *   cong_no_hien_tai == so_du_sau của bút toán mới nhất
+     *
+     * @return array{
+     *   can_doi: bool,
+     *   so_du_tong_hop: float,
+     *   so_du_theo_so_cai: float,
+     *   chenh_lech: float,
+     *   so_du_but_toan_cuoi: float|null,
+     *   chenh_lech_but_toan_cuoi: float
+     * }
+     */
+    public function kiemTraCanDoiCongNo(DaiLyApi $daiLy): array
+    {
+        $cauHinh = $daiLy->cauHinhApi ?: CauHinhApiDaiLy::where('dai_ly_api_id', $daiLy->id)->first();
+        $soDuTongHop = $cauHinh ? (float) $cauHinh->cong_no_hien_tai : 0.0;
+
+        $soDuTheoSoCai = (float) SoPhatSinhCongNo::where('dai_ly_api_id', $daiLy->id)
+            ->selectRaw(
+                "COALESCE(SUM(CASE
+                    WHEN loai_phat_sinh IN ('TANG_CONG_NO_DON_HANG', 'DIEU_CHINH_TANG') THEN so_tien
+                    WHEN loai_phat_sinh IN ('GIAM_CONG_NO_HOAN_TIEN', 'GIAM_CONG_NO_THANH_TOAN', 'DIEU_CHINH_GIAM') THEN -so_tien
+                    ELSE 0 END), 0) AS so_du"
+            )
+            ->value('so_du');
+
+        $butToanCuoi = SoPhatSinhCongNo::where('dai_ly_api_id', $daiLy->id)
+            ->orderByDesc('id')
+            ->first();
+
+        $soDuButToanCuoi = $butToanCuoi ? (float) $butToanCuoi->so_du_sau : 0.0;
+        $chenhLech = round($soDuTongHop - $soDuTheoSoCai, 2);
+        $chenhLechButToanCuoi = round($soDuTongHop - $soDuButToanCuoi, 2);
+
+        return [
+            'can_doi' => abs($chenhLech) < 0.01 && abs($chenhLechButToanCuoi) < 0.01,
+            'so_du_tong_hop' => round($soDuTongHop, 2),
+            'so_du_theo_so_cai' => round($soDuTheoSoCai, 2),
+            'chenh_lech' => $chenhLech,
+            'so_du_but_toan_cuoi' => $butToanCuoi ? round($soDuButToanCuoi, 2) : null,
+            'chenh_lech_but_toan_cuoi' => $chenhLechButToanCuoi,
+        ];
     }
 }

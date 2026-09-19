@@ -12,14 +12,15 @@ use App\Models\LichSuGuiWebhook;
 use App\Models\LoaiSanPham;
 use App\Models\SanPham;
 use App\Models\SoPhatSinhCongNo;
-use App\Models\ThanhToanCongNo;
 use App\Models\WebhookOutbox;
 use App\Services\DaiLyApi\B2bCreditService;
 use App\Services\DaiLyApi\B2bReconciliationService;
 use App\Services\DaiLyApi\B2bWebhookService;
 use App\Services\Security\UrlSafetyValidator;
+use Carbon\Carbon;
 use DomainException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -114,8 +115,13 @@ class B2bWebhookAndReconciliationTest extends TestCase
         $payload = json_decode($outbox->payload_json, true);
         $this->assertEquals('ORDER_COMPLETED', $payload['event_type']);
         $this->assertEquals($donHang->id, $payload['data']['order_id']);
-        $this->assertEquals('SUCCESS', $payload['data']['status']);
+
+        // Hợp đồng webhook dùng CHUNG bộ ánh xạ trạng thái công khai với API tra cứu.
+        // Trước đây payload trả thẳng trạng thái nội bộ (SUCCESS/PROVIDER_PENDING/...),
+        // rò rỉ chi tiết triển khai ra hợp đồng đối tác. Nay trả trạng thái công khai.
+        $this->assertEquals('success', $payload['data']['status']);
         $this->assertEquals('00', $payload['data']['result_code']);
+        $this->assertNotNull($payload['data']['completed_at']);
     }
 
     public function test_ssrf_validator_rejects_internal_and_dangerous_urls(): void
@@ -265,51 +271,76 @@ class B2bWebhookAndReconciliationTest extends TestCase
         $this->assertEquals($initialDebt + 50000 - 20000, (float) $this->config->fresh()->cong_no_hien_tai);
     }
 
+    /**
+     * Tạo một đơn B2B đã thành công và ĐÃ GHI NỢ qua đúng nghiệp vụ
+     * (giữ hạn mức -> chốt công nợ), để sổ phát sinh công nợ có bút toán
+     * TANG_CONG_NO_DON_HANG tương ứng.
+     *
+     * Không được tạo DonHang/ThanhToanCongNo trực tiếp trong test đối soát: làm vậy
+     * sẽ bỏ qua sổ cái và test chỉ còn kiểm chứng một đường tính toán không tồn tại
+     * trong production.
+     *
+     * @param string $thoiDiemTaoDon Thời điểm tạo đơn (created_at của don_hang)
+     * @param string $thoiDiemGhiNo  Thời điểm NCC báo thành công và công nợ được ghi nhận
+     */
+    private function taoDonHangDaGhiNo(
+        string $thoiDiemTaoDon,
+        string $thoiDiemGhiNo,
+        string $taiKhoan,
+        string $hauTo
+    ): DonHang {
+        Carbon::setTestNow($thoiDiemTaoDon);
+
+        $don = DonHang::create([
+            'ma_don_hang' => 'ORD_RECON_' . $hauTo . '_' . strtoupper(Str::random(6)),
+            'nguon_don' => 'b2b',
+            'dai_ly_api_id' => $this->partner->id,
+            'ma_don_doi_tac' => 'PARTNER_' . $hauTo . '_' . strtoupper(Str::random(6)),
+            'dich_vu_id' => $this->product->dich_vu_id,
+            'loai_san_pham_id' => $this->product->loai_san_pham_id,
+            'san_pham_id' => $this->product->id,
+            'tai_khoan_nhan' => $taiKhoan,
+            'menh_gia' => 10000,
+            'gia_ban' => 9700,
+            'trang_thai_don_hang' => 'PROCESSING',
+        ]);
+
+        Carbon::setTestNow($thoiDiemGhiNo);
+
+        DB::transaction(function () use ($don) {
+            $this->creditService->kiemTraVaGiuHanMuc($this->partner, $don, 9700);
+            $don->update(['trang_thai_don_hang' => 'SUCCESS']);
+            $this->creditService->chotCongNoThanhCong($don);
+        });
+
+        Carbon::setTestNow();
+
+        return $don->fresh();
+    }
+
     public function test_periodic_reconciliation_calculation_and_lock(): void
     {
         $tuNgay = '2026-09-01';
         $denNgay = '2026-09-30';
 
-        // 1. Tạo 2 đơn hàng thành công trong kỳ (mỗi đơn 9,700)
-        $don1 = DonHang::create([
-            'ma_don_hang' => 'ORD_RECON_1_' . time(),
-            'nguon_don' => 'b2b',
-            'dai_ly_api_id' => $this->partner->id,
-            'ma_don_doi_tac' => 'PARTNER_R1_' . time(),
-            'dich_vu_id' => $this->product->dich_vu_id,
-            'loai_san_pham_id' => $this->product->loai_san_pham_id,
-            'san_pham_id' => $this->product->id,
-            'tai_khoan_nhan' => '0988111222',
-            'menh_gia' => 10000,
-            'gia_ban' => 9700,
-            'trang_thai_don_hang' => 'SUCCESS',
-            'created_at' => '2026-09-10 10:00:00',
-        ]);
+        // Đại lý khởi đầu với dư nợ bằng 0 để số liệu kỳ suy ra hoàn toàn từ sổ phát sinh,
+        // nhờ đó kiểm chứng được cả bất biến cân đối công nợ ở cuối test.
+        $this->config->update(['cong_no_hien_tai' => 0]);
 
-        $don2 = DonHang::create([
-            'ma_don_hang' => 'ORD_RECON_2_' . time(),
-            'nguon_don' => 'b2b',
-            'dai_ly_api_id' => $this->partner->id,
-            'ma_don_doi_tac' => 'PARTNER_R2_' . time(),
-            'dich_vu_id' => $this->product->dich_vu_id,
-            'loai_san_pham_id' => $this->product->loai_san_pham_id,
-            'san_pham_id' => $this->product->id,
-            'tai_khoan_nhan' => '0988333444',
-            'menh_gia' => 10000,
-            'gia_ban' => 9700,
-            'trang_thai_don_hang' => 'SUCCESS',
-            'created_at' => '2026-09-15 11:00:00',
-        ]);
+        // 1. Hai đơn hàng thành công trong kỳ (mỗi đơn 9,700), ghi nợ qua B2bCreditService
+        $this->taoDonHangDaGhiNo('2026-09-10 10:00:00', '2026-09-10 10:00:00', '0988111222', 'R1');
+        $this->taoDonHangDaGhiNo('2026-09-15 11:00:00', '2026-09-15 11:00:00', '0988333444', 'R2');
 
-        // 2. Tạo thanh toán trong kỳ (10,000)
-        ThanhToanCongNo::create([
-            'dai_ly_api_id' => $this->partner->id,
-            'ma_thanh_toan' => 'PAY_RECON_' . time(),
-            'so_tien' => 10000,
-            'ngay_thanh_toan' => '2026-09-20 14:00:00',
-            'phuong_thuc' => 'CHUYEN_KHOAN',
-            'trang_thai' => 'DA_XAC_NHAN',
-        ]);
+        // 2. Thanh toán 10,000 trong kỳ, ghi nhận qua đúng nghiệp vụ
+        Carbon::setTestNow('2026-09-20 14:00:00');
+        $this->creditService->ghiNhanThanhToan(
+            $this->partner,
+            10000,
+            'CHUYEN_KHOAN',
+            null,
+            'Thanh toán công nợ kỳ đối soát test'
+        );
+        Carbon::setTestNow();
 
         // 3. Tạo kỳ đối soát
         $ky = $this->reconciliationService->taoKyDoiSoat($this->partner, $tuNgay, $denNgay);
@@ -321,6 +352,14 @@ class B2bWebhookAndReconciliationTest extends TestCase
         $this->assertEquals('DANG_MO', $ky->trang_thai);
         $this->assertEquals(2, $ky->chiTiet()->count());
 
+        // 3b. Số liệu kỳ phải khớp với số dư tổng hợp trên cấu hình đại lý
+        $canDoi = $this->creditService->kiemTraCanDoiCongNo($this->partner->fresh());
+        $this->assertTrue(
+            $canDoi['can_doi'],
+            'Sổ công nợ phải cân đối với số dư tổng hợp: ' . json_encode($canDoi)
+        );
+        $this->assertEquals((float) $ky->so_du_cuoi_ky, $canDoi['so_du_tong_hop']);
+
         // 4. Khóa kỳ đối soát
         $this->reconciliationService->khoaKy($ky, null);
         $this->assertEquals('DA_KHOA', $ky->fresh()->trang_thai);
@@ -328,6 +367,62 @@ class B2bWebhookAndReconciliationTest extends TestCase
         // 5. Thử tính toán lại kỳ đã khóa sẽ ném ngoại lệ
         $this->expectException(DomainException::class);
         $this->reconciliationService->tinhToanLaiKy($ky->fresh());
+    }
+
+    /**
+     * Đơn tạo cuối tháng trước nhưng công nợ chỉ được ghi nhận đầu tháng này
+     * phải thuộc kỳ phát sinh nợ THỰC TẾ, không phải kỳ theo ngày tạo đơn.
+     */
+    public function test_reconciliation_counts_by_ledger_date_not_order_creation_date(): void
+    {
+        $this->config->update(['cong_no_hien_tai' => 0]);
+
+        $donTre = $this->taoDonHangDaGhiNo(
+            '2026-08-28 23:30:00',  // đơn được tạo trong tháng 8
+            '2026-09-05 09:00:00',  // NCC báo thành công, ghi nợ trong tháng 9
+            '0988777666',
+            'LATE'
+        );
+
+        // Kỳ tháng 8 KHÔNG được chứa đơn này dù đơn được tạo trong tháng 8
+        $kyThang8 = $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-08-01', '2026-08-31');
+        $this->assertEquals(0, (float) $kyThang8->tong_phat_sinh_tang);
+        $this->assertEquals(0, $kyThang8->chiTiet()->count());
+
+        // Kỳ tháng 9 phải chứa đúng đơn này
+        $kyThang9 = $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-09-01', '2026-09-30');
+        $this->assertEquals(9700, (float) $kyThang9->tong_phat_sinh_tang);
+        $this->assertEquals(9700, (float) $kyThang9->so_du_cuoi_ky);
+        $this->assertEquals(1, $kyThang9->chiTiet()->count());
+
+        $chiTiet = $kyThang9->chiTiet()->first();
+        $this->assertEquals($donTre->id, $chiTiet->don_hang_id);
+        // Chi tiết vẫn lưu ngày tạo đơn gốc để tra cứu, nhưng kỳ được tính theo ngày ghi nợ
+        $this->assertEquals('2026-08-28', $chiTiet->ngay_tao_don->toDateString());
+    }
+
+    /**
+     * Hai kỳ của cùng một đại lý không được chồng lấn, nếu không cùng một bút toán
+     * sẽ bị tính vào hai kỳ và công nợ bị nhân đôi khi đối chiếu.
+     */
+    public function test_reconciliation_rejects_overlapping_periods(): void
+    {
+        $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-09-01', '2026-09-30');
+
+        $this->expectException(DomainException::class);
+        $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-09-15', '2026-10-15');
+    }
+
+    /**
+     * Kỳ đã khóa là bất biến: không được tạo lại, không được tính lại.
+     */
+    public function test_locked_reconciliation_period_cannot_be_recreated(): void
+    {
+        $ky = $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-09-01', '2026-09-30');
+        $this->reconciliationService->khoaKy($ky, null);
+
+        $this->expectException(DomainException::class);
+        $this->reconciliationService->taoKyDoiSoat($this->partner, '2026-09-01', '2026-09-30');
     }
 
     public function test_reconciliation_excel_export(): void

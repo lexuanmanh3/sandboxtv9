@@ -47,6 +47,7 @@ class DonHang extends Model
         'ma_san_pham_snapshot', 'ten_san_pham_snapshot', 'menh_gia_snapshot', 'gia_ban_snapshot',
         'gia_von_thuc_te', 'nha_cung_cap_thanh_cong_id', 'lan_goi_thanh_cong_id',
         'thanh_toan_luc', 'bat_dau_xu_ly_luc', 'hoan_thanh_luc', 'that_bai_luc',
+        'xu_ly_owner', 'xu_ly_lease_den',
     ];
 
     /**
@@ -66,7 +67,18 @@ class DonHang extends Model
         'bat_dau_xu_ly_luc' => 'datetime',
         'hoan_thanh_luc' => 'datetime',
         'that_bai_luc' => 'datetime',
+        'xu_ly_lease_den' => 'datetime',
     ];
+
+    /**
+     * Lease sở hữu xử lý còn hiệu lực hay không.
+     * Dùng để phân biệt "worker còn sống" với "worker đã chết" trước khi recovery
+     * quyết định dispatch lại — tuyệt đối không dùng tuổi đơn làm bằng chứng.
+     */
+    public function dangCoLeaseXuLy(): bool
+    {
+        return $this->xu_ly_lease_den !== null && $this->xu_ly_lease_den->isFuture();
+    }
 
     /**
      * Đơn hàng thuộc một người dùng / khách hàng.

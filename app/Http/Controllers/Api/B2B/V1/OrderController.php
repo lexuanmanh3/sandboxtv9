@@ -148,29 +148,44 @@ class OrderController extends Controller
             ]);
         }
 
-        // Xác thực và lọc theo khoảng thời gian nếu có
-        if ($request->filled('from_date')) {
-            $fromDate = $request->query('from_date');
-            if (!strtotime($fromDate)) {
-                return response()->json([
-                    'success' => false,
-                    'error_code' => 'INVALID_DATE_FORMAT',
-                    'message' => "Tham số 'from_date' không đúng định dạng ngày tháng hợp lệ.",
-                ], Response::HTTP_BAD_REQUEST);
-            }
-            $query->where('created_at', '>=', $fromDate);
+        // Xác thực và lọc theo khoảng thời gian nếu có.
+        // Bắt buộc định dạng ngày tường minh: strtotime() một mình chấp nhận cả
+        // 'now', 'tomorrow', '+1 week'... khiến hợp đồng API không xác định.
+        $fromDate = $this->docNgay($request, 'from_date');
+        if ($fromDate instanceof JsonResponse) {
+            return $fromDate;
         }
 
-        if ($request->filled('to_date')) {
-            $toDate = $request->query('to_date');
-            if (!strtotime($toDate)) {
-                return response()->json([
-                    'success' => false,
-                    'error_code' => 'INVALID_DATE_FORMAT',
-                    'message' => "Tham số 'to_date' không đúng định dạng ngày tháng hợp lệ.",
-                ], Response::HTTP_BAD_REQUEST);
-            }
-            $query->where('created_at', '<=', $toDate);
+        $toDate = $this->docNgay($request, 'to_date');
+        if ($toDate instanceof JsonResponse) {
+            return $toDate;
+        }
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'INVALID_DATE_RANGE',
+                'message' => "Tham số 'from_date' không được lớn hơn 'to_date'.",
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Chặn truy vấn quét toàn bộ bảng (from_date=1970-01-01) làm nghẽn hệ thống
+        $maxRangeDays = max(1, (int) config('b2b.max_query_range_days', 31));
+        if ($fromDate && $toDate && $fromDate->diffInDays($toDate) > $maxRangeDays) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'DATE_RANGE_TOO_WIDE',
+                'message' => "Khoảng thời gian tra cứu tối đa là {$maxRangeDays} ngày. Vui lòng thu hẹp khoảng tra cứu.",
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($fromDate) {
+            $query->where('created_at', '>=', $fromDate->copy()->startOfDay());
+        }
+
+        if ($toDate) {
+            // Bao trọn ngày kết thúc, nếu không đơn tạo lúc 14:00 ngày to_date sẽ bị loại.
+            $query->where('created_at', '<=', $toDate->copy()->endOfDay());
         }
 
         if ($request->filled('status')) {
@@ -199,6 +214,55 @@ class OrderController extends Controller
             'total' => $orders->total(),
             'data' => $items,
         ]);
+    }
+
+    /**
+     * Đọc và xác thực một tham số ngày.
+     *
+     * Chỉ chấp nhận đúng hai định dạng tường minh: Y-m-d và ISO-8601. Không dùng
+     * Carbon::parse() trực tiếp vì nó chấp nhận cả 'now', 'tomorrow', '+1 week'...
+     * khiến hợp đồng API không xác định và kết quả tra cứu phụ thuộc thời điểm gọi.
+     *
+     * @return \Carbon\Carbon|JsonResponse|null Carbon khi hợp lệ, null khi không truyền,
+     *                                           JsonResponse lỗi 400 khi sai định dạng.
+     */
+    protected function docNgay(Request $request, string $tenThamSo)
+    {
+        if (!$request->filled($tenThamSo)) {
+            return null;
+        }
+
+        $giaTri = trim((string) $request->query($tenThamSo));
+
+        $laNgayThuan = (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $giaTri);
+        $laIso8601 = (bool) preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})?$/', $giaTri);
+
+        if (!$laNgayThuan && !$laIso8601) {
+            return $this->loiNgay($tenThamSo);
+        }
+
+        try {
+            $ngay = \Carbon\Carbon::parse($giaTri);
+        } catch (\Throwable $e) {
+            return $this->loiNgay($tenThamSo);
+        }
+
+        // PHP tự cuộn ngày không hợp lệ (2026-02-31 -> 2026-03-03). Kiểm tra vòng lại
+        // để từ chối thay vì âm thầm tra cứu sai khoảng thời gian.
+        if ($laNgayThuan && $ngay->format('Y-m-d') !== $giaTri) {
+            return $this->loiNgay($tenThamSo);
+        }
+
+        return $ngay;
+    }
+
+    protected function loiNgay(string $tenThamSo): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'error_code' => 'INVALID_DATE_FORMAT',
+            'message' => "Tham số '{$tenThamSo}' không đúng định dạng. Yêu cầu định dạng Y-m-d (ví dụ: 2026-09-20) hoặc ISO-8601.",
+        ], Response::HTTP_BAD_REQUEST);
     }
 
     /**

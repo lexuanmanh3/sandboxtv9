@@ -42,7 +42,7 @@ BODY_SHA256
 
 #### Quy tắc chuẩn hóa từng dòng:
 1. **METHOD**: Tên phương thức HTTP viết hoa (`GET`, `POST`, `PUT`, `DELETE`).
-2. **CANONICAL_PATH_WITH_QUERY**: URI path kèm query string (nếu có tham số query, sắp xếp key theo alphabet `ksort`). Ví dụ: `/api/b2b/v1/orders` hoặc `/api/b2b/v1/orders?limit=20&page=1`.
+2. **CANONICAL_PATH_WITH_QUERY**: URI path kèm query string (nếu có tham số query, sắp xếp key theo alphabet `ksort`). Ví dụ: `/api/b2b/v1/orders` hoặc `/api/b2b/v1/orders?page=1&per_page=20`.
 3. **TIMESTAMP**: Giá trị nguyên của `X-Timestamp`.
 4. **NONCE**: Giá trị nguyên bản của `X-Nonce`.
 5. **IDEMPOTENCY_KEY**: Giá trị nguyên bản của `Idempotency-Key`. Nếu là request `GET` hoặc không có header này, để trống dòng này (vẫn giữ ký tự `\n`).
@@ -78,25 +78,79 @@ $signature = hash_hmac('sha256', $canonical, $clientSecret);
 
 ### 2.4. Test Vector Tham Chiếu (Test Vector Verification)
 
+> **Trạng thái kiểm chứng:** các giá trị dưới đây được kiểm chứng tự động bởi
+> `tests/Feature/B2B/B2bDocumentedVectorTest.php`. Nếu tài liệu và mã nguồn lệch nhau,
+> test sẽ đỏ.
+>
+> **Lưu ý về Timestamp:** timestamp `1726700000` (19/09/2024) là giá trị CỐ ĐỊNH chỉ dùng
+> để tái lập kết quả băm khi kiểm thử offline. Nó nằm ngoài cửa sổ ±300 giây nên KHÔNG
+> dùng để gọi API thật. Khi gọi thật, luôn dùng `time()` hiện tại.
+
+#### 2.4.1. Vector POST `/api/b2b/v1/orders`
+
 - **Secret Key**: `test_secret_key_123`
 - **Method**: `POST`
 - **URI**: `/api/b2b/v1/orders`
 - **Timestamp**: `1726700000`
 - **Nonce**: `a1b2c3d4e5f60718`
 - **Idempotency-Key**: `8f4b1d64-9a3d-47df-9db2-1e9c9c991a01`
-- **Raw Body**: `{"partner_order_id":"TEST_VEC_01","product_code":"TOPUP_VTE_10K","account":"0965657810"}`
-- **Body SHA-256**: `d7e008a0df7fc2256ec47a7b8e1f57ecdbb7c0cefa37c569f4eaee0495f57a07`
-- **Canonical String**:
+- **Raw Body** (không có khoảng trắng thừa):
+  `{"partner_order_id":"TEST_VEC_01","product_code":"TOPUP_VTE_10K","account":"0965657810"}`
+- **Body SHA-256**: `26e7ec17bf8a772ca51a378431fc8d7b8ece029e386ff2b7f76d3dbe0dfc4ba4`
+- **Canonical String** (6 dòng, phân tách bằng `\n`):
   ```text
   POST
   /api/b2b/v1/orders
   1726700000
   a1b2c3d4e5f60718
   8f4b1d64-9a3d-47df-9db2-1e9c9c991a01
-  d7e008a0df7fc2256ec47a7b8e1f57ecdbb7c0cefa37c569f4eaee0495f57a07
+  26e7ec17bf8a772ca51a378431fc8d7b8ece029e386ff2b7f76d3dbe0dfc4ba4
   ```
+- **Calculated Signature** (`hash_hmac('sha256', canonical, 'test_secret_key_123')`):
+  `fc6ca89f925aae3f12300b80916010612a6c85e6dfaa9787782a70bf97dc27a1`
+
+#### 2.4.2. Vector GET `/api/b2b/v1/orders`
+
+- **Secret Key**: `test_secret_key_123`
+- **Method**: `GET`
+- **URI gửi lên**: `/api/b2b/v1/orders?per_page=20&page=1`
+- **Canonical URI (ĐÃ ksort)**: `/api/b2b/v1/orders?page=1&per_page=20`
+- **Timestamp**: `1726700100`
+- **Nonce**: `b2c3d4e5f60718a1`
+- **Idempotency-Key**: *(để trống — GET không yêu cầu)*
+- **Body SHA-256**: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (hash của chuỗi rỗng)
+- **Canonical String**:
+  ```text
+  GET
+  /api/b2b/v1/orders?page=1&per_page=20
+  1726700100
+  b2c3d4e5f60718a1
+
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  ```
+  (dòng thứ 5 trống — vẫn phải giữ ký tự `\n`)
 - **Calculated Signature**:
-  `hash_hmac('sha256', canonical, 'test_secret_key_123')`
+  `616125c7cad022b4501c0ca01f8a1f86e0d54af72efd2c1c4d81ae4c7f790055`
+
+> ⚠️ **Bẫy thường gặp:** query string phải được `ksort` **trước khi ký**, không ký theo
+> nguyên văn URL. Ký trên `per_page=20&page=1` (chưa sắp xếp) sẽ bị trả về
+> `401 INVALID_SIGNATURE` dù URL gửi lên giống hệt nhau.
+
+#### 2.4.3. Đoạn mã kiểm chứng nhanh (PHP)
+
+```php
+$canonical = implode("\n", [
+    'POST',
+    '/api/b2b/v1/orders',
+    '1726700000',
+    'a1b2c3d4e5f60718',
+    '8f4b1d64-9a3d-47df-9db2-1e9c9c991a01',
+    hash('sha256', '{"partner_order_id":"TEST_VEC_01","product_code":"TOPUP_VTE_10K","account":"0965657810"}'),
+]);
+
+echo hash_hmac('sha256', $canonical, 'test_secret_key_123');
+// fc6ca89f925aae3f12300b80916010612a6c85e6dfaa9787782a70bf97dc27a1
+```
 
 ---
 
@@ -123,16 +177,25 @@ $signature = hash_hmac('sha256', $canonical, $clientSecret);
   {
     "success": true,
     "order_id": 1045,
+    "order_code": "B2B20260919021500A1B2C3",
     "partner_order_id": "ORD_20260919_001",
     "status": "pending",
-    "product_code": "TOPUP_VTE_10K",
+    "message": "Đơn hàng B2B đã được tiếp nhận và đưa vào hàng đợi xử lý.",
     "account": "0965657810",
+    "product_code": "TOPUP_VTE_10K",
     "amount": 10000,
     "price": 9800,
+    "discount": 200,
     "created_at": "2026-09-19T02:15:00+07:00",
     "completed_at": null
   }
   ```
+- **Ghi chú**: `202 Accepted` nghĩa là đơn **đã được tiếp nhận và giữ hạn mức**, KHÔNG phải
+  đã nạp thành công. Đối tác phải chờ webhook hoặc tra cứu lại để biết kết quả cuối.
+  `completed_at` chỉ có giá trị khi `status` là `success` hoặc `failed`.
+- **Header `X-Cache: HIT`**: có mặt khi response được trả từ bản ghi idempotency
+  (đối tác gửi lại cùng `Idempotency-Key` + cùng payload). Đây là tín hiệu an toàn,
+  không phải lỗi.
 
 ### 3.2. Tra Cứu Đơn Hàng Theo ID (Get Order by ID)
 - **Endpoint**: `GET /api/b2b/v1/orders/{id}`
@@ -157,10 +220,43 @@ $signature = hash_hmac('sha256', $canonical, $clientSecret);
 ### 3.3. Tra Cứu Danh Sách Đơn Hàng (Query Orders)
 - **Endpoint**: `GET /api/b2b/v1/orders`
 - **Query Params**:
-  - `partner_order_id`: Lọc theo mã đơn của đối tác
+  - `partner_order_id`: Lọc theo mã đơn của đối tác (trả về một đơn, HTTP 404 nếu không có)
   - `status`: Lọc theo trạng thái (`pending`, `processing`, `success`, `failed`, `manual_review`)
-  - `from_date`, `to_date`: Lọc theo thời gian tạo (`Y-m-d H:i:s`)
-  - `limit`: Số bản ghi mỗi trang (mặc định 20, tối đa 100)
+  - `from_date`: Lọc từ ngày (định dạng `Y-m-d` hoặc ISO-8601, ví dụ `2026-09-01`)
+  - `to_date`: Lọc đến hết ngày (bao trọn ngày `to_date`, không cắt tại 00:00)
+  - `page`: Trang hiện tại (mặc định `1`)
+  - `per_page`: Số bản ghi mỗi trang (mặc định `20`, tối đa `100`)
+- **Ràng buộc**:
+  - Khoảng `from_date`–`to_date` tối đa **31 ngày**; vượt quá trả `400 DATE_RANGE_TOO_WIDE`.
+  - `from_date` không được lớn hơn `to_date`; sai trả `400 INVALID_DATE_RANGE`.
+  - Chỉ chấp nhận `Y-m-d` hoặc ISO-8601. Các biểu thức tương đối như `now`, `tomorrow`,
+    `+1 week` bị từ chối để kết quả tra cứu luôn xác định.
+- **Ghi chú về phân trang**: tham số là `per_page`, **không phải** `limit`.
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "current_page": 1,
+    "per_page": 20,
+    "total": 42,
+    "data": [
+      {
+        "order_id": 1045,
+        "order_code": "B2B20260919021500A1B2C3",
+        "partner_order_id": "ORD_20260919_001",
+        "account": "0965657810",
+        "product_code": "TOPUP_VTE_10K",
+        "product_name": "Viettel 10.000đ",
+        "amount": 10000,
+        "price": 9800,
+        "status": "success",
+        "payment_status": "chua_thanh_toan",
+        "created_at": "2026-09-19T02:15:00+07:00",
+        "completed_at": "2026-09-19T02:15:04+07:00"
+      }
+    ]
+  }
+  ```
 
 ### 3.4. Tra Cứu Dịch Vụ & Bảng Giá (Get Services & Products)
 - **Endpoint**: `GET /api/b2b/v1/services`
@@ -214,23 +310,58 @@ $signature = hash_hmac('sha256', $canonical, $clientSecret);
 
 ### 5.2. Bảng Mã Lỗi (Error Codes)
 
-| HTTP Status | Error Code | Mô tả |
-| :--- | :--- | :--- |
-| 400 | `MISSING_HEADERS` | Thiếu một trong các header bắt buộc (`X-Client-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature`) |
-| 400 | `MISSING_IDEMPOTENCY_KEY` | Thiếu header `Idempotency-Key` trong request POST/PUT |
-| 400 | `VALIDATION_FAILED` | Dữ liệu đầu vào sai định dạng (số điện thoại không hợp lệ, thiếu trường...) |
-| 401 | `REQUEST_EXPIRED` | Thời gian gửi request lệch quá $\pm 300$ giây so với giờ server |
-| 401 | `REPLAY_DETECTED` | Header `X-Nonce` đã được gửi trong vòng 10 phút qua |
-| 401 | `KEY_REVOKED` | Cặp khóa API của đối tác đã bị thu hồi hoặc đại lý bị khóa |
-| 401 | `INVALID_SIGNATURE` | Chữ ký HMAC không khớp với payload hoặc headers |
-| 403 | `IP_NOT_ALLOWED` | IP gửi request không nằm trong danh sách IP Whitelist |
-| 403 | `UNAUTHORIZED_SERVICE` | Đối tác chưa được phân quyền sử dụng dịch vụ này |
-| 404 | `PRODUCT_NOT_FOUND` | Mã sản phẩm (`product_code`) không tồn tại hoặc đã ngừng cung cấp |
-| 404 | `ORDER_NOT_FOUND` | Không tìm thấy đơn hàng thuộc quyền sở hữu của đối tác |
-| 409 | `IDEMPOTENCY_CONFLICT` | Tái sử dụng `Idempotency-Key` nhưng dữ liệu payload bị thay đổi |
-| 409 | `DUPLICATE_ORDER` | Mã đơn `partner_order_id` đã được sử dụng với một key khác |
-| 422 | `INSUFFICIENT_CREDIT` | Hạn mức tín dụng khả dụng của đối tác không đủ để giữ chỗ cho đơn này |
-| 500 | `INTERNAL_SERVER_ERROR` | Lỗi hệ thống nội bộ, đối tác cần retry với nguyên vẹn `Idempotency-Key` |
+Cột "HTTP" là mã trạng thái thực tế hệ thống trả về. Đối tác nên xử lý theo `error_code`,
+không chỉ theo HTTP status.
+
+| HTTP | Error Code | Mô tả | Đối tác nên làm gì |
+| :--- | :--- | :--- | :--- |
+| 400 | `MISSING_AUTHENTICATION_HEADERS` | Thiếu một trong các header bắt buộc (`X-Client-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature`) | Sửa code tích hợp |
+| 400 | `MISSING_IDEMPOTENCY_KEY` | Thiếu header `Idempotency-Key` trong request POST/PUT/DELETE | Sinh UUID v4 và gửi kèm |
+| 400 | `INVALID_IDEMPOTENCY_KEY` | `Idempotency-Key` không phải định dạng UUID v4 | Sinh lại bằng UUID v4 |
+| 400 | `INVALID_NONCE_FORMAT` | `X-Nonce` không khớp `^[A-Za-z0-9_-]{16,64}$` | Sinh nonce ngẫu nhiên ≥16 ký tự |
+| 400 | `INVALID_JSON_BODY` | Body không phải JSON object hợp lệ | Sửa payload |
+| 400 | `UNKNOWN_FIELD` | Body chứa field không có trong hợp đồng | Chỉ gửi `partner_order_id`, `product_code`, `account` |
+| 400 | `AMBIGUOUS_ACCOUNT_FIELD` | Gửi cả `account` và `phone_number` với giá trị khác nhau | Chỉ dùng `account` |
+| 400 | `INVALID_DATE_FORMAT` | `from_date`/`to_date` sai định dạng | Dùng `Y-m-d` hoặc ISO-8601 |
+| 400 | `INVALID_DATE_RANGE` | `from_date` lớn hơn `to_date` | Đảo lại khoảng |
+| 400 | `DATE_RANGE_TOO_WIDE` | Khoảng tra cứu vượt giới hạn (mặc định 31 ngày) | Thu hẹp khoảng tra cứu |
+| 400 | `INVALID_STATUS_FILTER` | Giá trị `status` không hợp lệ | Dùng một trong 5 trạng thái public |
+| 400 | `INVALID_REQUEST` | Dữ liệu đầu vào sai định dạng (số điện thoại, mã đơn...) | Sửa payload theo mục 3.1 |
+| 401 | `REQUEST_EXPIRED` | `X-Timestamp` lệch quá ±300 giây so với giờ server | Đồng bộ NTP, ký lại với `time()` hiện tại |
+| 401 | `REPLAY_DETECTED` | `X-Nonce` đã được dùng trong vòng 10 phút qua | Sinh nonce mới cho mỗi request |
+| 401 | `INVALID_SIGNATURE` | Chữ ký HMAC không khớp | Kiểm tra lại canonical string (mục 2.2) |
+| 401 | `INVALID_CLIENT_ID` | `X-Client-Id` không tồn tại | Kiểm tra lại client_id được cấp |
+| 401 | `KEY_REVOKED` | Cặp khóa API đã bị thu hồi | Liên hệ TV9Tech để cấp khóa mới |
+| 403 | `PARTNER_INACTIVE` | Tài khoản đại lý đang bị tạm khóa | Liên hệ TV9Tech |
+| 403 | `IP_NOT_ALLOWED` | IP gửi request không nằm trong whitelist | Đăng ký IP với TV9Tech |
+| 403 | `IP_ALLOWLIST_NOT_CONFIGURED` | Đại lý chưa được cấu hình IP whitelist | Đăng ký IP với TV9Tech |
+| 403 | `PRODUCT_EXCLUDED` | Sản phẩm nằm trong danh sách loại trừ của đại lý | Dùng sản phẩm khác |
+| 403 | `PRODUCT_UNAUTHORIZED` | Đại lý chưa được phân quyền dùng dịch vụ/sản phẩm này | Liên hệ TV9Tech để mở quyền |
+| 404 | `INVALID_PRODUCT` | `product_code` không tồn tại hoặc đã ngừng cung cấp | Tra cứu lại `/services` |
+| 404 | `ORDER_NOT_FOUND` | Không tìm thấy đơn thuộc quyền sở hữu của đối tác | Kiểm tra lại `order_id`/`partner_order_id` |
+| 409 | `IDEMPOTENCY_CONFLICT` | Tái sử dụng `Idempotency-Key` với payload khác | Dùng key mới cho giao dịch mới |
+| 409 | `DUPLICATE_ORDER` | `partner_order_id` đã tồn tại với key khác | Tra cứu đơn cũ thay vì tạo mới |
+| 413 | `PAYLOAD_TOO_LARGE` | Body vượt giới hạn (mặc định 64 KiB) | Giảm kích thước payload |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type` không phải `application/json` | Đặt đúng header |
+| 422 | `INSUFFICIENT_CREDIT` | Hạn mức khả dụng không đủ để giữ chỗ cho đơn | Nạp thêm hạn mức hoặc chờ đối soát |
+| 429 | `RATE_LIMIT_EXCEEDED` | Vượt giới hạn tần suất (xem `Retry-After`) | Backoff theo header `Retry-After` |
+| 500 | `INTERNAL_ERROR` | Lỗi hệ thống nội bộ | Retry với **nguyên vẹn** `Idempotency-Key`, kèm `request_id` khi báo lỗi |
+| 5xx | `ORDER_CREATION_FAILED` | Lỗi không phân loại được khi tạo đơn | Retry với nguyên vẹn `Idempotency-Key` |
+
+> Response lỗi `500 INTERNAL_ERROR` có kèm `request_id`. Vui lòng cung cấp `request_id`
+> khi liên hệ hỗ trợ — **không** gửi kèm secret key hoặc chữ ký.
+
+### 5.3. Giới Hạn Tần Suất (Rate Limit)
+
+Hệ thống áp dụng hai tầng giới hạn:
+
+| Tầng | Khóa | Mặc định | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| Theo IP | IP kết nối | 300 req/phút | Áp dụng TRƯỚC xác thực; bảo vệ hệ thống khỏi flood |
+| Theo đại lý | `client_id` đã xác thực | Cấu hình riêng từng đối tác | Áp dụng SAU xác thực |
+
+Mọi response đều kèm header `X-RateLimit-Limit` và `X-RateLimit-Remaining`.
+Khi vượt ngưỡng, hệ thống trả `429` kèm `Retry-After` (giây).
 
 ---
 
