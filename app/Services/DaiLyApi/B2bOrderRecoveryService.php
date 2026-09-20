@@ -11,6 +11,7 @@ use App\Models\DonHang;
 use App\Models\LanGoiNhaCungCap;
 use App\Services\Alert\TelegramAlertService;
 use App\Services\Topup\DonHangStateMachine;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -50,8 +51,35 @@ class B2bOrderRecoveryService
     {
         $trangThai = strtoupper((string) $donHang->trang_thai_don_hang);
 
-        // 1. Đơn đã có kết quả cuối -> không làm gì thêm ngoài việc chốt outbox.
-        if (in_array($trangThai, ['SUCCESS', 'FAILED', 'REFUNDED', 'MANUAL_REVIEW'], true)) {
+        // 1. Đơn đã có kết quả cuối.
+        //
+        // TỰ CHỮA LÀNH cho SUCCESS/FAILED: trạng thái cuối có thể đã được ghi vào đơn
+        // nhưng tiến trình chết NGAY SAU ĐÓ, trước khi kịp chốt công nợ / giải phóng
+        // khoản giữ / tạo sự kiện webhook. Không có bước này, khoản giữ sẽ kẹt ở HOLDING
+        // VĨNH VIỄN: mọi lượt phục hồi về sau đều thoát ngay tại đây nên không gì sửa được.
+        //
+        // Ba thao tác dưới đây đều đã idempotent nên gọi lại là an toàn:
+        //   - chotCongNoThanhCong: thoát ngay nếu đã có bút toán TX-ORD-{id} hoặc khoản giữ đã COMMITTED
+        //   - giaiPhongKhoanGiu: chỉ tác động khi khoản giữ còn HOLDING
+        //   - taoSuKien: firstOrCreate theo event_id tất định (uuid5)
+        if (in_array($trangThai, ['SUCCESS', 'FAILED'], true)) {
+            if ($donHang->dai_ly_api_id) {
+                if ($trangThai === 'SUCCESS') {
+                    $this->creditService->chotCongNoThanhCong($donHang);
+                    $this->webhookService->taoSuKien($donHang, 'order.success');
+                } else {
+                    $this->creditService->giaiPhongKhoanGiu($donHang, 'Phục hồi: đơn đã kết luận thất bại dứt khoát');
+                    $this->webhookService->taoSuKien($donHang, 'order.failed');
+                }
+            }
+
+            $this->chotOutbox($record);
+            return self::ACTION_ALREADY_FINAL;
+        }
+
+        // Đơn đã hoàn tiền hoặc đang đối soát thủ công: KHÔNG đụng tới khoản giữ và công nợ.
+        // Giữ nguyên quy tắc nghiệp vụ: đối soát thủ công không tự kết luận, không tự hoàn.
+        if (in_array($trangThai, ['REFUNDED', 'MANUAL_REVIEW'], true)) {
             $this->chotOutbox($record);
             return self::ACTION_ALREADY_FINAL;
         }
@@ -156,45 +184,63 @@ class B2bOrderRecoveryService
 
     /**
      * Hoàn tất chốt đơn thành công dựa trên kết quả cuối của NCC (chống lặp).
+     *
+     * Toàn bộ việc đổi trạng thái đơn, chốt công nợ và tạo sự kiện webhook nằm trong
+     * MỘT transaction và có khóa dòng đơn. Trước đây ba việc này tách rời và không khóa:
+     * tiến trình chết giữa chừng sẽ để lại đơn SUCCESS nhưng khoản giữ vẫn HOLDING và
+     * không có bút toán công nợ — sai lệch sổ sách mà không lượt phục hồi nào sửa được.
      */
     protected function hoanTatThanhCong(DonHang $donHang, LanGoiNhaCungCap $call, ?B2bOrderOutbox $record): void
     {
-        if (strtoupper((string) $donHang->trang_thai_don_hang) !== 'SUCCESS') {
-            $this->state->chuyen($donHang, TrangThaiDonHang::SUCCESS, 'Phục hồi: NCC đã xác nhận thành công trước khi worker dừng');
-            $donHang->update([
-                'nha_cung_cap_thanh_cong_id' => $call->nha_cung_cap_id,
-                'lan_goi_thanh_cong_id' => $call->id,
-                'hoan_thanh_luc' => $donHang->hoan_thanh_luc ?: now(),
-            ]);
-            $donHang->refresh();
-        }
+        DB::transaction(function () use ($donHang, $call, $record) {
+            // Khóa dòng đơn rồi mới đọc trạng thái: hai tiến trình phục hồi chạy song song
+            // sẽ nối tiếp nhau thay vì cùng chốt một đơn.
+            $donHang = DonHang::query()->lockForUpdate()->find($donHang->id) ?: $donHang;
 
-        if ($donHang->dai_ly_api_id) {
-            $this->creditService->chotCongNoThanhCong($donHang);
-            $this->webhookService->taoSuKien($donHang, 'order.success');
-        }
+            if (strtoupper((string) $donHang->trang_thai_don_hang) !== 'SUCCESS') {
+                $this->state->chuyen($donHang, TrangThaiDonHang::SUCCESS, 'Phục hồi: NCC đã xác nhận thành công trước khi worker dừng');
+                $donHang->update([
+                    'nha_cung_cap_thanh_cong_id' => $call->nha_cung_cap_id,
+                    'lan_goi_thanh_cong_id' => $call->id,
+                    'hoan_thanh_luc' => $donHang->hoan_thanh_luc ?: now(),
+                ]);
+                $donHang->refresh();
+            }
 
-        $this->chotOutbox($record);
+            if ($donHang->dai_ly_api_id) {
+                $this->creditService->chotCongNoThanhCong($donHang);
+                $this->webhookService->taoSuKien($donHang, 'order.success');
+            }
+
+            $this->chotOutbox($record);
+        });
     }
 
     /**
      * Hoàn tất chốt đơn thất bại chắc chắn (chống lặp).
      * Chỉ gọi khi TOÀN BỘ lần gọi NCC đã có kết quả thất bại dứt khoát.
+     *
+     * Cùng lý do như hoanTatThanhCong(): đổi trạng thái, giải phóng khoản giữ và tạo
+     * sự kiện webhook phải nằm trong một transaction có khóa dòng đơn.
      */
     protected function hoanTatThatBai(DonHang $donHang, ?B2bOrderOutbox $record): void
     {
-        if (strtoupper((string) $donHang->trang_thai_don_hang) !== 'FAILED') {
-            $this->state->chuyen($donHang, TrangThaiDonHang::FAILED, 'Phục hồi: NCC đã trả kết quả thất bại dứt khoát trước khi worker dừng');
-            $donHang->update(['that_bai_luc' => $donHang->that_bai_luc ?: now()]);
-            $donHang->refresh();
-        }
+        DB::transaction(function () use ($donHang, $record) {
+            $donHang = DonHang::query()->lockForUpdate()->find($donHang->id) ?: $donHang;
 
-        if ($donHang->dai_ly_api_id) {
-            $this->creditService->giaiPhongKhoanGiu($donHang, 'Phục hồi: NCC thất bại dứt khoát');
-            $this->webhookService->taoSuKien($donHang, 'order.failed');
-        }
+            if (strtoupper((string) $donHang->trang_thai_don_hang) !== 'FAILED') {
+                $this->state->chuyen($donHang, TrangThaiDonHang::FAILED, 'Phục hồi: NCC đã trả kết quả thất bại dứt khoát trước khi worker dừng');
+                $donHang->update(['that_bai_luc' => $donHang->that_bai_luc ?: now()]);
+                $donHang->refresh();
+            }
 
-        $this->chotOutbox($record);
+            if ($donHang->dai_ly_api_id) {
+                $this->creditService->giaiPhongKhoanGiu($donHang, 'Phục hồi: NCC thất bại dứt khoát');
+                $this->webhookService->taoSuKien($donHang, 'order.failed');
+            }
+
+            $this->chotOutbox($record);
+        });
     }
 
     /**
@@ -237,8 +283,18 @@ class B2bOrderRecoveryService
 
     protected function chotOutbox(?B2bOrderOutbox $record): void
     {
-        if ($record && $record->status !== 'PROCESSED') {
-            $record->update(['status' => 'PROCESSED', 'processed_at' => now()]);
+        if (!$record || $record->status === 'PROCESSED') {
+            return;
         }
+
+        DB::transaction(function () use ($record) {
+            // Khóa dòng outbox trước khi ghi: lệnh phục hồi và worker gửi webhook có thể
+            // chạy song song trên cùng một bản ghi.
+            $moiNhat = B2bOrderOutbox::query()->lockForUpdate()->find($record->id);
+
+            if ($moiNhat && $moiNhat->status !== 'PROCESSED') {
+                $moiNhat->update(['status' => 'PROCESSED', 'processed_at' => now()]);
+            }
+        });
     }
 }

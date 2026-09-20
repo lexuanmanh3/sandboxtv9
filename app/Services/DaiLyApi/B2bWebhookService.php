@@ -136,7 +136,17 @@ class B2bWebhookService
     }
 
     /**
-     * Nhận quyền xử lý thủ công (Admin bấm gửi lại) — bỏ qua điều kiện trạng thái.
+     * Nhận quyền xử lý thủ công (Admin bấm gửi lại) — bỏ qua điều kiện trạng thái,
+     * NHƯNG vẫn phải tôn trọng lease đang sống.
+     *
+     * Trước đây hàm này UPDATE vô điều kiện nên có thể cướp quyền của một worker đang
+     * gửi dở: người kiểm tra "đang PROCESSING và còn lease" ở guiLaiThuCong() là một
+     * phép ĐỌC, còn UPDATE xảy ra sau đó — hai thao tác không nguyên tử. Khoảng trống
+     * giữa chúng đủ để worker vừa nhận quyền bị ghi đè, dẫn tới cùng một sự kiện được
+     * gửi hai lần song song.
+     *
+     * Nay điều kiện được đưa thẳng vào câu UPDATE, nên chỉ đúng một tiến trình thắng:
+     * hoặc sự kiện không ở trạng thái PROCESSING, hoặc lease cũ đã hết hạn.
      */
     public function nhanXuLyThuCong(int $outboxId): ?string
     {
@@ -145,6 +155,15 @@ class B2bWebhookService
 
         $affected = DB::table('webhook_outbox')
             ->where('id', $outboxId)
+            ->where(function ($q) use ($now) {
+                $q->where('trang_thai', '!=', 'PROCESSING')
+                  ->orWhere(function ($sub) use ($now) {
+                      $sub->where('trang_thai', 'PROCESSING')
+                          ->where(function ($t) use ($now) {
+                              $t->whereNull('khoa_den')->orWhere('khoa_den', '<', $now);
+                          });
+                  });
+            })
             ->update([
                 'trang_thai' => 'PROCESSING',
                 'khoa_so_huu' => $owner,
@@ -336,21 +355,17 @@ class B2bWebhookService
     {
         $outbox = WebhookOutbox::findOrFail($webhookOutboxId);
 
-        if ($outbox->trang_thai === 'PROCESSING' && $outbox->khoa_den && $outbox->khoa_den->isFuture()) {
-            return [
-                'success' => false,
-                'outbox' => $outbox,
-                'message' => 'Sự kiện đang được một tiến trình khác gửi. Vui lòng thử lại sau.',
-            ];
-        }
-
-        // Gửi lại thủ công được phép bỏ qua trạng thái (kể cả MANUAL_REVIEW / FAILED)
+        // Gửi lại thủ công được phép bỏ qua trạng thái (kể cả MANUAL_REVIEW / FAILED).
+        // Quyền sở hữu được giành bằng MỘT câu UPDATE có điều kiện lease, không kiểm tra
+        // trước rồi mới ghi — nhờ vậy không thể cướp lease của worker đang gửi dở.
         $owner = $this->nhanXuLyThuCong($outbox->id);
         if (!$owner) {
+            $moiNhat = $outbox->fresh();
+
             return [
                 'success' => false,
-                'outbox' => $outbox->fresh(),
-                'message' => 'Không nhận được quyền gửi lại sự kiện này.',
+                'outbox' => $moiNhat,
+                'message' => 'Sự kiện đang được một tiến trình khác gửi. Vui lòng thử lại sau.',
             ];
         }
 

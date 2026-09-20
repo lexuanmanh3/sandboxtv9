@@ -167,8 +167,25 @@ final class AppotaPayTopupProvider implements NhaCungCapTopupInterface
         return $response;
     }
 
+    /**
+     * Chốt an toàn: khi TOPUP_ALLOW_REAL_CALLS=false, mọi Provider thật đều bị chặn
+     * không được phát sinh HTTP request ra ngoài. Dùng cho các phiên kiểm thử local
+     * để bảo đảm không thể vô tình tạo giao dịch thật.
+     */
+    private function chanGoiThatKhiBiCam(): void
+    {
+        if (config('topup.allow_real_calls', true) === false) {
+            throw new RuntimeException(
+                'Đã chặn gọi nhà cung cấp thật vì TOPUP_ALLOW_REAL_CALLS=false. ' .
+                'Đặt lại true nếu thực sự muốn phát sinh giao dịch thật.'
+            );
+        }
+    }
+
     private function client()
     {
+        $this->chanGoiThatKhiBiCam();
+
         $partnerCode = (string) ($this->ketNoi->partner_code ?: $this->ketNoi->api_user ?: $this->ketNoi->username);
         $apiKey = (string) ($this->ketNoi->api_key_ma_hoa ?: $this->ketNoi->api_user ?: $this->ketNoi->username);
         $token = $this->jwt->tao($partnerCode, $apiKey, $this->secret());

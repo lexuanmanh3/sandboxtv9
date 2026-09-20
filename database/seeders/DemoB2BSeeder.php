@@ -78,11 +78,16 @@ class DemoB2BSeeder extends Seeder
         }
 
         if ($daiLy && $donHang2) {
+            // Trạng thái khoản giữ CHỈ có ba giá trị hợp lệ: HOLDING | COMMITTED | RELEASED.
+            // Trước đây seeder ghi 'DANG_GIU' — giá trị không tồn tại trong nghiệp vụ:
+            // B2bCreditService tính hạn mức khả dụng bằng WHERE trang_thai = 'HOLDING' nên
+            // khoản giữ này KHÔNG BAO GIỜ được trừ vào hạn mức, cũng không thể chốt (COMMITTED)
+            // hay giải phóng (RELEASED) — đơn treo vĩnh viễn và hạn mức bị báo cao hơn thực tế.
             KhoanGiuHanMuc::firstOrCreate([
                 'dai_ly_api_id' => $daiLy->id,
                 'don_hang_id' => $donHang2->id,
                 'so_tien_giu' => 100000,
-                'trang_thai' => 'DANG_GIU',
+                'trang_thai' => 'HOLDING',
                 'chot_cong_no_luc' => null,
                 'giai_phong_luc' => null,
                 'ly_do_giai_phong' => 'Giao dịch timeout tại NCC, chờ đối soát.',
