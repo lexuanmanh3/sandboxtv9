@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\B2B;
 
 use App\Http\Controllers\Controller;
 use App\Models\BangGiaDaiLy;
+use App\Models\B2bIpRejection;
 use App\Models\CauHinhApiDaiLy;
 use App\Models\DaiLyApi;
 use App\Models\DaiLyApiDichVuDuocPhep;
@@ -55,7 +56,12 @@ class PartnerManagementController extends Controller
         // Lấy danh mục để chọn trong Modal
         $dichVus = DichVu::where('trang_thai', 'hoat_dong')->get();
         $loaiSanPhams = LoaiSanPham::where('trang_thai', 'hoat_dong')->get();
-        $sanPhams = SanPham::whereIn('trang_thai', ['hoat_dong', 'ACTIVE'])->get();
+        // Eager load loaiSanPham để gom nhóm sản phẩm theo loại trên UI cấu hình whitelist/blacklist
+        $sanPhams = SanPham::with('loaiSanPham')
+            ->whereIn('trang_thai', ['hoat_dong', 'ACTIVE'])
+            ->orderBy('loai_san_pham_id')
+            ->orderBy('menh_gia')
+            ->get();
 
         return view('admin.b2b.partners', compact('partners', 'dichVus', 'loaiSanPhams', 'sanPhams'));
     }
@@ -337,5 +343,128 @@ class PartnerManagementController extends Controller
         });
 
         return redirect()->route('admin.b2b.partners.index')->with('success', "Đã cập nhật bảng giá đại lý thành công.");
+    }
+
+    // ========================================================================
+    // IP REJECTION TRACKING
+    // ========================================================================
+
+    /**
+     * Trang tra cứu IP bị IP allowlist từ chối cho một đại lý cụ thể.
+     * Hiển thị danh sách các IP đã từng bị chặn, kèm số lần, lần cuối, endpoint,
+     * và nút "Thêm vào whitelist" / "Đánh dấu đã xử lý".
+     */
+    public function ipRejections(Request $request, int $id): View
+    {
+        $partner = DaiLyApi::with('cauHinhApi')->findOrFail($id);
+
+        $filterStatus = $request->input('trang_thai', 'chua_xu_ly'); // chua_xu_ly | da_xu_ly | tat_ca
+        $tuNgay = $request->input('tu_ngay');
+        $denNgay = $request->input('den_ngay');
+
+        $query = B2bIpRejection::where('dai_ly_api_id', $partner->id);
+
+        if ($filterStatus === 'chua_xu_ly') {
+            $query->where('da_xu_ly', false);
+        } elseif ($filterStatus === 'da_xu_ly') {
+            $query->where('da_xu_ly', true);
+        }
+
+        if ($tuNgay) {
+            $query->where('attempted_at', '>=', $tuNgay . ' 00:00:00');
+        }
+        if ($denNgay) {
+            $query->where('attempted_at', '<=', $denNgay . ' 23:59:59');
+        }
+
+        // Lấy các bản ghi chi tiết, group theo IP để hiển thị gọn.
+        $rejections = $query->orderByDesc('attempted_at')->limit(500)->get();
+
+        $grouped = $rejections
+            ->groupBy('ip_address')
+            ->map(function ($items, $ip) {
+                $latest = $items->sortByDesc('attempted_at')->first();
+                return [
+                    'ip_address' => $ip,
+                    'so_lan' => $items->count(),
+                    'lan_cuoi' => $latest->attempted_at,
+                    'endpoint_cuoi' => $latest->endpoint,
+                    'method_cuoi' => $latest->method,
+                    'error_code_cuoi' => $latest->error_code,
+                    'da_xu_ly' => $items->every(fn ($i) => (bool) $i->da_xu_ly),
+                    'co_ban_ghi_chua_xu_ly' => $items->contains(fn ($i) => !$i->da_xu_ly),
+                    'rejection_ids' => $items->pluck('id')->all(),
+                    'latest_rejection_id' => $latest->id,
+                ];
+            })
+            ->sortByDesc('lan_cuoi')
+            ->values();
+
+        $thongKe = [
+            'tong_ban_ghi' => B2bIpRejection::where('dai_ly_api_id', $partner->id)->count(),
+            'chua_xu_ly' => B2bIpRejection::where('dai_ly_api_id', $partner->id)->where('da_xu_ly', false)->count(),
+            'da_xu_ly' => B2bIpRejection::where('dai_ly_api_id', $partner->id)->where('da_xu_ly', true)->count(),
+            'so_ip_doc_lap' => B2bIpRejection::where('dai_ly_api_id', $partner->id)->distinct('ip_address')->count('ip_address'),
+        ];
+
+        return view('admin.b2b.partners-ip-rejections', compact(
+            'partner', 'grouped', 'thongKe', 'filterStatus', 'tuNgay', 'denNgay'
+        ));
+    }
+
+    /**
+     * Thêm IP bị từ chối vào whitelist của đại lý và đánh dấu tất cả bản ghi cùng IP là đã xử lý.
+     */
+    public function addIpToWhitelist(Request $request, int $id, int $rejectionId): RedirectResponse
+    {
+        $partner = DaiLyApi::findOrFail($id);
+        $rejection = B2bIpRejection::where('id', $rejectionId)
+            ->where('dai_ly_api_id', $id)
+            ->firstOrFail();
+
+        $cauHinh = $partner->cauHinhApi;
+        if (!$cauHinh) {
+            return back()->with('error', 'Đại lý chưa có cấu hình API.');
+        }
+
+        DB::transaction(function () use ($cauHinh, $rejection, $id) {
+            $currentIps = array_filter(array_map('trim', preg_split('/[\r\n,;]+/', (string) ($cauHinh->danh_sach_ip_ket_noi ?? ''))));
+
+            if (!in_array($rejection->ip_address, $currentIps, true)) {
+                $currentIps[] = $rejection->ip_address;
+                $cauHinh->danh_sach_ip_ket_noi = implode("\n", $currentIps);
+                $cauHinh->save();
+            }
+
+            B2bIpRejection::where('dai_ly_api_id', $id)
+                ->where('ip_address', $rejection->ip_address)
+                ->where('da_xu_ly', false)
+                ->update([
+                    'da_xu_ly' => true,
+                    'resolved_at' => now(),
+                    'resolved_by_user_id' => auth()->id(),
+                ]);
+        });
+
+        return back()->with('success', "Đã thêm IP {$rejection->ip_address} vào whitelist và đánh dấu đã xử lý.");
+    }
+
+    /**
+     * Đánh dấu bản ghi rejection đã xử lý mà KHÔNG thêm IP vào whitelist
+     * (dùng khi admin muốn giữ chặn IP này, ví dụ IP scan/attack).
+     */
+    public function markResolved(Request $request, int $id, int $rejectionId): RedirectResponse
+    {
+        $rejection = B2bIpRejection::where('id', $rejectionId)
+            ->where('dai_ly_api_id', $id)
+            ->firstOrFail();
+
+        $rejection->update([
+            'da_xu_ly' => true,
+            'resolved_at' => now(),
+            'resolved_by_user_id' => auth()->id(),
+        ]);
+
+        return back()->with('success', "Đã đánh dấu IP {$rejection->ip_address} là đã xử lý (giữ chặn).");
     }
 }

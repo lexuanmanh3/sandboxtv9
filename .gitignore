@@ -1,34 +1,69 @@
+/.phpunit.cache
 /node_modules
+/public/build
 /public/hot
 /public/storage
 /storage/*.key
-/storage/logs/*.log
-/storage/framework/cache/*
-/storage/framework/sessions/*
-/storage/framework/views/*
+/storage/pail
 /vendor
 .env
-.env.*
-!/.env.example
+.env.backup
+.env.production
+.phpactor.json
 .phpunit.result.cache
-auth.json
 Homestead.json
 Homestead.yaml
+auth.json
 npm-debug.log
 yarn-error.log
+/.fleet
 /.idea
 /.vscode
-*.pem
-*.key
-*.p12
-*.pfx
-*.sql
+/.zed
+
+# AI tool / dev scratch
+/.claude
+/.playwright-mcp
+/*.iml
+
+# Local backup reference directory (contains nested .git + production .env)
+/lang/
+
+# Logs and runtime
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/framework/testing/*
+!/storage/framework/testing/.gitkeep
+/storage/framework/views/*
+!/storage/framework/views/.gitkeep
+/bootstrap/cache/*
+!/bootstrap/cache/.gitkeep
+
+# User uploads & cache in public
+/public/uploads/*
+!/public/uploads/.gitkeep
+/public/bot_cache/
+/public/bot_html/
+/public/h5_html/
+/public/files/
+
+# SQLite databases (if used)
+/database/*.sqlite
+/database/*.sqlite-journal
+
+# Backup files
 *.bak
-*.old
-
 *.zip
+*.tar
+*.gz
 
-# Ignore nested clone inside lang
-/lang/*
-/lang/.*
-!/lang/en/
+# OS files
+.DS_Store
+Thumbs.db
+
+# Allow examples
+!.env.example

@@ -27,6 +27,7 @@ class CauHinhThongBao extends Model
         'bat_canh_bao_so_du_thap',
         'bat_canh_bao_manual_review',
         'bat_thong_bao_hoan_tien',
+        'bat_canh_bao_ip_rejected',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class CauHinhThongBao extends Model
         'bat_canh_bao_so_du_thap' => 'boolean',
         'bat_canh_bao_manual_review' => 'boolean',
         'bat_thong_bao_hoan_tien' => 'boolean',
+        'bat_canh_bao_ip_rejected' => 'boolean',
     ];
 
     /**
@@ -99,6 +101,7 @@ class CauHinhThongBao extends Model
         return match ($suKien) {
             'order_success' => $this->chat_id_order ?: ($this->chat_id_alert ?: config('services.telegram.channel_order')),
             'manual_review', 'order_refunded' => $this->chat_id_admin ?: ($this->chat_id_alert ?: config('services.telegram.channel_admin')),
+            'ip_rejected' => $this->chat_id_alert ?: config('services.telegram.channel_alert'),
             default => $this->chat_id_alert ?: config('services.telegram.channel_alert'),
         };
     }
@@ -125,6 +128,7 @@ class CauHinhThongBao extends Model
                     'bat_canh_bao_so_du_thap' => true,
                     'bat_canh_bao_manual_review' => true,
                     'bat_thong_bao_hoan_tien' => true,
+                    'bat_canh_bao_ip_rejected' => true,
                 ]);
             }
             return $config;

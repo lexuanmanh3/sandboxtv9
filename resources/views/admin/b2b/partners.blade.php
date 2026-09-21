@@ -108,6 +108,125 @@
     .account-row-menu {
       min-width: 175px;
     }
+
+    /* ============== UI cho cấu hình sản phẩm whitelist / blacklist ============== */
+    .product-config-block {
+      border: 1px solid var(--admin-slate-200);
+      border-radius: 8px;
+      background: var(--admin-slate-50);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .product-config-block__title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .product-config-block__title strong {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--admin-slate-800);
+    }
+    .product-config-block__title small {
+      font-size: 11px;
+      color: var(--admin-slate-500);
+      font-weight: 500;
+    }
+    .product-config-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .product-config-toolbar input[type="search"],
+    .product-config-toolbar select {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid var(--admin-slate-300);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 12px;
+      background: #fff;
+    }
+    .product-config-toolbar button {
+      border: 1px solid var(--admin-slate-300);
+      background: #fff;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--admin-slate-700);
+    }
+    .product-config-toolbar button:hover {
+      background: var(--admin-slate-100);
+    }
+    .product-config-list {
+      border: 1px solid var(--admin-slate-200);
+      border-radius: 6px;
+      background: #fff;
+      max-height: 260px;
+      overflow-y: auto;
+      padding: 8px 10px;
+    }
+    .product-config-group {
+      margin-bottom: 10px;
+    }
+    .product-config-group__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--admin-slate-200);
+      margin-bottom: 6px;
+    }
+    .product-config-group__header strong {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--admin-brand-700);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .product-config-group__header label {
+      display: inline-flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      gap: 4px !important;
+      font-size: 11px !important;
+      color: var(--admin-slate-500) !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      cursor: pointer;
+    }
+    .product-config-group__items {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 4px 10px;
+    }
+    .product-config-empty {
+      padding: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--admin-slate-400);
+    }
+    .product-config-summary {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--admin-brand-50);
+      color: var(--admin-brand-700);
+    }
+    .product-config-summary.is-empty {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
   </style>
 @endpush
 
@@ -232,6 +351,15 @@
                   <div id="action-{{ $partner->id }}" class="account-row-menu" hidden>
                     <button type="button" onclick="editPartner({{ $partner->id }})">Sửa thông tin</button>
                     <button type="button" onclick="openPricingModal({{ $partner->id }}, '{{ addslashes($partner->ten_dai_ly_api) }}')">Bảng giá đại lý</button>
+                    @php
+                      $unresolvedIpCount = \App\Models\B2bIpRejection::where('dai_ly_api_id', $partner->id)->where('da_xu_ly', false)->count();
+                    @endphp
+                    <a href="{{ route('admin.b2b.partners.ip-rejections', $partner->id) }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:13px;text-decoration:none;color:var(--admin-slate-700);text-align:left;">
+                      <span>Xem IP bị chặn</span>
+                      @if($unresolvedIpCount > 0)
+                        <span style="background:#dc2626;color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;">{{ $unresolvedIpCount }}</span>
+                      @endif
+                    </a>
                     <form method="POST" action="{{ route('admin.b2b.partners.rotate-key', $partner->id) }}" onsubmit="return confirm('Bạn có chắc muốn xoay API Key cho đại lý này không? Key cũ sẽ duy trì 48h.')">
                       @csrf
                       <button type="submit" style="color: #d97706;">Xoay API Key</button>
@@ -430,6 +558,123 @@
                   <span>{{ $lsp->ten_loai_san_pham ?: $lsp->ma_loai_san_pham }}</span>
                 </label>
               @endforeach
+            </div>
+          </div>
+
+          {{-- ============ SẢN PHẨM ĐƯỢC PHÉP (whitelist) ============ --}}
+          <div class="account-form-grid__full">
+            <div class="product-config-block" data-product-config="allow">
+              <div class="product-config-block__title">
+                <div>
+                  <strong>Sản phẩm được phép (Whitelist)</strong>
+                  <br>
+                  <small>Chọn các sản phẩm cụ thể đại lý được phép giao dịch. Tầng 3 kiểm soát chặt nhất.</small>
+                </div>
+                <span class="product-config-summary" data-summary="allow">0 sản phẩm</span>
+              </div>
+
+              <div class="product-config-toolbar">
+                <input type="search" data-filter-search="allow" placeholder="🔍 Tìm theo tên hoặc mã sản phẩm..." />
+                <select data-filter-loai="allow">
+                  <option value="">-- Tất cả loại sản phẩm --</option>
+                  @foreach($loaiSanPhams as $lsp)
+                    <option value="{{ $lsp->id }}">{{ $lsp->ten_loai_san_pham ?: $lsp->ma_loai_san_pham }}</option>
+                  @endforeach
+                </select>
+                <button type="button" data-action="select-all-visible" data-target="allow">Chọn tất cả (hiện)</button>
+                <button type="button" data-action="clear-all-visible" data-target="allow">Bỏ chọn (hiện)</button>
+              </div>
+
+              <div class="product-config-list" data-list="allow">
+                @php
+                  $sanPhamsTheoLoai = $sanPhams->groupBy(fn($sp) => $sp->loai_san_pham_id ?? 0);
+                  $tenLoaiMap = $loaiSanPhams->keyBy('id');
+                @endphp
+                @forelse($sanPhamsTheoLoai as $loaiId => $dsSp)
+                  @php
+                    $tenLoai = optional($tenLoaiMap->get($loaiId))->ten_loai_san_pham
+                            ?: optional($tenLoaiMap->get($loaiId))->ma_loai_san_pham
+                            ?: 'Chưa phân loại';
+                  @endphp
+                  <div class="product-config-group" data-group-loai="{{ $loaiId }}">
+                    <div class="product-config-group__header">
+                      <strong>{{ $tenLoai }}</strong>
+                      <label>
+                        <input type="checkbox" data-group-select="allow" data-group-loai="{{ $loaiId }}">
+                        <span>chọn cả nhóm</span>
+                      </label>
+                    </div>
+                    <div class="product-config-group__items">
+                      @foreach($dsSp as $sp)
+                        <label class="account-check-item" data-product-row data-product-loai="{{ $loaiId }}" data-product-name="{{ strtolower($sp->ten_san_pham . ' ' . $sp->ma_san_pham) }}">
+                          <input type="checkbox" name="san_pham_ids[]" value="{{ $sp->id }}" class="check-sp check-sp-allow">
+                          <span>
+                            {{ $sp->ten_san_pham }}
+                            <small style="color: var(--admin-slate-400); font-size: 11px;">
+                              ({{ number_format($sp->menh_gia) }}đ)
+                            </small>
+                          </span>
+                        </label>
+                      @endforeach
+                    </div>
+                  </div>
+                @empty
+                  <div class="product-config-empty">Chưa có sản phẩm hoạt động nào trong hệ thống.</div>
+                @endforelse
+              </div>
+            </div>
+          </div>
+
+          {{-- ============ SẢN PHẨM LOẠI TRỪ (blacklist) ============ --}}
+          <div class="account-form-grid__full">
+            <div class="product-config-block" data-product-config="exclude" style="background: #fef2f2; border-color: #fecaca;">
+              <div class="product-config-block__title">
+                <div>
+                  <strong style="color: #b91c1c;">Sản phẩm loại trừ (Blacklist)</strong>
+                  <br>
+                  <small style="color: #991b1b;">Đánh dấu các sản phẩm đại lý bị cấm giao dịch, kể cả khi sản phẩm đó nằm trong whitelist ở trên.</small>
+                </div>
+                <span class="product-config-summary is-empty" data-summary="exclude">0 sản phẩm</span>
+              </div>
+
+              <div class="product-config-toolbar">
+                <input type="search" data-filter-search="exclude" placeholder="🔍 Tìm theo tên hoặc mã sản phẩm..." />
+                <select data-filter-loai="exclude">
+                  <option value="">-- Tất cả loại sản phẩm --</option>
+                  @foreach($loaiSanPhams as $lsp)
+                    <option value="{{ $lsp->id }}">{{ $lsp->ten_loai_san_pham ?: $lsp->ma_loai_san_pham }}</option>
+                  @endforeach
+                </select>
+                <button type="button" data-action="select-all-visible" data-target="exclude">Chọn tất cả (hiện)</button>
+                <button type="button" data-action="clear-all-visible" data-target="exclude">Bỏ chọn (hiện)</button>
+              </div>
+
+              <div class="product-config-list" data-list="exclude">
+                @foreach($sanPhamsTheoLoai as $loaiId => $dsSp)
+                  <div class="product-config-group" data-group-loai="{{ $loaiId }}">
+                    <div class="product-config-group__header">
+                      <strong>{{ optional($tenLoaiMap->get($loaiId))->ten_loai_san_pham ?: (optional($tenLoaiMap->get($loaiId))->ma_loai_san_pham ?: 'Chưa phân loại') }}</strong>
+                      <label>
+                        <input type="checkbox" data-group-select="exclude" data-group-loai="{{ $loaiId }}">
+                        <span>chọn cả nhóm</span>
+                      </label>
+                    </div>
+                    <div class="product-config-group__items">
+                      @foreach($dsSp as $sp)
+                        <label class="account-check-item" data-product-row data-product-loai="{{ $loaiId }}" data-product-name="{{ strtolower($sp->ten_san_pham . ' ' . $sp->ma_san_pham) }}">
+                          <input type="checkbox" name="san_pham_loai_tru[]" value="{{ $sp->id }}" class="check-sp check-sp-exclude">
+                          <span>
+                            {{ $sp->ten_san_pham }}
+                            <small style="color: var(--admin-slate-400); font-size: 11px;">
+                              ({{ number_format($sp->menh_gia) }}đ)
+                            </small>
+                          </span>
+                        </label>
+                      @endforeach
+                    </div>
+                  </div>
+                @endforeach
+              </div>
             </div>
           </div>
 
@@ -663,7 +908,10 @@ function switchTab(tabId) {
 function openPartnerModal(mode) {
   document.getElementById('partnerModal').hidden = false;
   document.getElementById('partnerForm').reset();
-  document.querySelectorAll('.check-dv, .check-lsp').forEach(c => c.checked = false);
+  document.querySelectorAll('.check-dv, .check-lsp, .check-sp').forEach(c => c.checked = false);
+  document.querySelectorAll('[data-filter-search], [data-filter-loai]').forEach(el => el.value = '');
+  applyProductFilters();
+  updateProductSummary();
   switchTab('tab-account');
 
   if (mode === 'create') {
@@ -754,6 +1002,24 @@ function editPartner(partnerOrId) {
 
   const lspIds = (partner.loai_san_pham || []).map(l => l.id);
   document.querySelectorAll('.check-lsp').forEach(c => c.checked = lspIds.includes(parseInt(c.value)));
+
+  // Whitelist sản phẩm (tầng 3)
+  const spIds = (partner.san_pham || []).map(s => s.id);
+  document.querySelectorAll('.check-sp-allow').forEach(c => c.checked = spIds.includes(parseInt(c.value)));
+
+  // Blacklist sản phẩm loại trừ (lưu trong cau_hinh_api.san_pham_loai_tru - chấp nhận cả ID dạng string)
+  let excludedIds = [];
+  if (partner.cau_hinh_api && Array.isArray(partner.cau_hinh_api.san_pham_loai_tru)) {
+    excludedIds = partner.cau_hinh_api.san_pham_loai_tru
+      .map(v => parseInt(v))
+      .filter(v => !isNaN(v));
+  }
+  document.querySelectorAll('.check-sp-exclude').forEach(c => {
+    c.checked = excludedIds.includes(parseInt(c.value));
+  });
+
+  applyProductFilters();
+  updateProductSummary();
 }
 
 function openPricingModal(partnerId, partnerName) {
@@ -765,6 +1031,99 @@ function openPricingModal(partnerId, partnerName) {
 function closePricingModal() {
   document.getElementById('pricingModal').hidden = true;
 }
+
+// ========================================================================
+// LOGIC CẤU HÌNH SẢN PHẨM (WHITELIST / BLACKLIST)
+// ========================================================================
+
+/**
+ * Áp dụng filter theo từ khóa tìm kiếm + loại sản phẩm cho cả 2 block (allow / exclude).
+ * Ẩn các dòng sản phẩm không khớp, ẩn cả nhóm nếu không còn dòng nào hiển thị.
+ */
+function applyProductFilters() {
+  ['allow', 'exclude'].forEach(function (mode) {
+    const searchInput = document.querySelector('[data-filter-search="' + mode + '"]');
+    const loaiSelect  = document.querySelector('[data-filter-loai="' + mode + '"]');
+    const listEl      = document.querySelector('[data-list="' + mode + '"]');
+    if (!listEl) return;
+
+    const keyword = (searchInput?.value || '').trim().toLowerCase();
+    const loaiId  = loaiSelect?.value || '';
+
+    listEl.querySelectorAll('[data-product-row]').forEach(function (row) {
+      const rowLoai = row.getAttribute('data-product-loai') || '';
+      const rowName = row.getAttribute('data-product-name') || '';
+      const matchLoai  = !loaiId || rowLoai === loaiId;
+      const matchName  = !keyword || rowName.indexOf(keyword) !== -1;
+      row.style.display = (matchLoai && matchName) ? '' : 'none';
+    });
+
+    // Ẩn cả nhóm nếu không còn sản phẩm nào hiển thị
+    listEl.querySelectorAll('[data-group-loai]').forEach(function (group) {
+      const visibleRows = group.querySelectorAll('[data-product-row]:not([style*="display: none"])').length;
+      group.style.display = visibleRows > 0 ? '' : 'none';
+    });
+  });
+}
+
+/**
+ * Cập nhật badge đếm số sản phẩm đã chọn cho mỗi block (allow / exclude).
+ */
+function updateProductSummary() {
+  ['allow', 'exclude'].forEach(function (mode) {
+    const summaryEl = document.querySelector('[data-summary="' + mode + '"]');
+    if (!summaryEl) return;
+    const checked = document.querySelectorAll('.check-sp-' + mode + ':checked').length;
+    summaryEl.textContent = checked + ' sản phẩm';
+    summaryEl.classList.toggle('is-empty', checked === 0);
+  });
+}
+
+/**
+ * Bắt sự kiện filter / search / select-all / clear-all cho cả 2 block.
+ */
+document.addEventListener('input', function (e) {
+  if (e.target.matches('[data-filter-search], [data-filter-loai]')) {
+    applyProductFilters();
+  }
+  if (e.target.matches('.check-sp')) {
+    updateProductSummary();
+  }
+});
+
+document.addEventListener('change', function (e) {
+  // Chọn cả nhóm: tick tất cả checkbox sản phẩm thuộc loại đó (chỉ trong nhóm đang hiển thị)
+  if (e.target.matches('[data-group-select]')) {
+    const mode   = e.target.getAttribute('data-group-select');
+    const loaiId = e.target.getAttribute('data-group-loai');
+    const checked = e.target.checked;
+    document.querySelectorAll('[data-list="' + mode + '"] [data-product-row][data-product-loai="' + loaiId + '"]').forEach(function (row) {
+      if (row.style.display !== 'none') {
+        const cb = row.querySelector('.check-sp-' + mode);
+        if (cb) cb.checked = checked;
+      }
+    });
+    updateProductSummary();
+  }
+});
+
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.getAttribute('data-action');
+  const target = btn.getAttribute('data-target');
+
+  if (action === 'select-all-visible' || action === 'clear-all-visible') {
+    const wantChecked = action === 'select-all-visible';
+    document.querySelectorAll('[data-list="' + target + '"] [data-product-row]').forEach(function (row) {
+      if (row.style.display !== 'none') {
+        const cb = row.querySelector('.check-sp-' + target);
+        if (cb) cb.checked = wantChecked;
+      }
+    });
+    updateProductSummary();
+  }
+});
 </script>
 @endpush
 @endsection

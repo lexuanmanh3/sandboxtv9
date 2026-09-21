@@ -201,6 +201,11 @@ Route::middleware(['auth', 'active'])->prefix('admin/b2b')->name('admin.b2b.')->
     Route::post('/partners/{id}/revoke-key', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'revokeKey'])->name('partners.revoke-key')->middleware('quyen:b2b_partner.rotate_key');
     Route::post('/partners/{id}/pricing', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'savePricing'])->name('partners.pricing')->middleware('quyen:b2b_partner.pricing');
 
+    // IP rejection tracking — tra cứu IP bị IP allowlist từ chối
+    Route::get('/partners/{id}/ip-rejections', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'ipRejections'])->name('partners.ip-rejections')->middleware('quyen:b2b_partner.view');
+    Route::post('/partners/{id}/ip-rejections/{rejectionId}/add-to-whitelist', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'addIpToWhitelist'])->name('partners.ip-rejections.add-to-whitelist')->middleware('quyen:b2b_partner.update');
+    Route::post('/partners/{id}/ip-rejections/{rejectionId}/mark-resolved', [\App\Http\Controllers\Admin\B2B\PartnerManagementController::class, 'markResolved'])->name('partners.ip-rejections.mark-resolved')->middleware('quyen:b2b_partner.update');
+
     // Cấu hình tuyến dịch vụ
     Route::get('/routing-configs', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'index'])->name('routing-configs.index')->middleware('quyen:b2b_routing.view');
     Route::get('/routing-configs/create', [\App\Http\Controllers\Admin\B2B\RoutingConfigController::class, 'create'])->name('routing-configs.create')->middleware('quyen:b2b_routing.create');

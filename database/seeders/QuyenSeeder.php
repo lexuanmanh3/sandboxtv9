@@ -264,6 +264,8 @@ class QuyenSeeder extends Seeder
                 ['b2b_partner.update', 'Sửa đại lý API'],
                 ['b2b_partner.rotate_key', 'Đổi / Thu hồi Key API'],
                 ['b2b_partner.pricing', 'Cấu hình bảng giá riêng'],
+                ['b2b_partner.ip_rejection.view', 'Xem IP bị từ chối'],
+                ['b2b_partner.ip_rejection.resolve', 'Xử lý IP bị từ chối'],
             ],
             'b2b_order.access' => [
                 ['b2b_order.view', 'Xem đơn hàng B2B'],

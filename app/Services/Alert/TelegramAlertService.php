@@ -272,6 +272,35 @@ class TelegramAlertService
     }
 
     /**
+     * Cảnh báo khi reseller B2B bị IP allowlist từ chối (HTTP 403).
+     * Giúp admin biết ngay IP mới của reseller để kịp thời cập nhật whitelist
+     * mà không phải hỏi thủ công.
+     */
+    public function alertIpRejected(\App\Models\DaiLyApi $partner, string $ip, string $method, string $path): bool
+    {
+        $dbConfig = CauHinhThongBao::layCauHinhTelegram();
+        if (!($dbConfig->bat_canh_bao_ip_rejected ?? false)) {
+            return false;
+        }
+
+        $chatId = $dbConfig->layChatIdChoSuKien('ip_rejected');
+        if (!$chatId) {
+            return false;
+        }
+
+        $time = now()->format('d/m/Y H:i:s');
+
+        $message = "🛡️ <b>[IP BỊ TỪ CHỐI - B2B]</b>\n"
+            . "🏢 <b>Đại lý:</b> {$partner->ten_dai_ly_api} ({$partner->ma_dai_ly_api})\n"
+            . "🌐 <b>IP bị chặn:</b> <code>{$ip}</code>\n"
+            . "📡 <b>Endpoint:</b> {$method} {$path}\n"
+            . "⏰ <b>Thời gian:</b> {$time}\n"
+            . "👉 Admin có thể thêm IP này vào whitelist tại: /admin/b2b/partners/{$partner->id}/ip-rejections";
+
+        return $this->sendMessage($chatId, $message);
+    }
+
+    /**
      * Thông báo khi admin hoàn tiền thủ công cho đơn hàng.
      */
     public function alertOrderRefunded(\App\Models\DonHang $donHang, string $reason, string $operator): bool
