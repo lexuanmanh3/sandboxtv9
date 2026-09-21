@@ -52,4 +52,22 @@ $app->singleton(
 |
 */
 
+// Workaround cho Hostinger shared hosting: composer dump-autoload khong the
+// chay do thieu bien moi truong HOME, nen cac class moi them vao App\Models
+// khong tu dong load qua PSR-4. Require truc tiep file model o day de dam
+// bao class B2bIpRejection (va cac class tuong tu trong tuong lai) luon san
+// sang truoc khi Laravel boot kernel va compile Blade view.
+//
+// Ly do ky thuat: Laravel compile view qua ViewServiceProvider, khi gap
+// @php \App\Models\B2bIpRejection::... trong blade, PSR-4 autoloader cua
+// composer can class nay trong classmap. Tren moi truong dev/local,
+// `composer dump-autoload` tu dong cap nhat classmap. Tren Hostinger shared
+// hosting, lenh nay that bai vi composer can HOME env var (khong duoc thiet
+// lap mac dinh), nen classmap bi "dong bang" va class moi khong duoc load.
+//
+// TODO: Khi chuyen sang VPS/co quyen SSH, chay:
+//     composer dump-autoload --optimize
+// roi xoa dong require_once ben duoi.
+require_once __DIR__ . '/../app/Models/B2bIpRejection.php';
+
 return $app;
