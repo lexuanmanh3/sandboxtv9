@@ -287,6 +287,20 @@
     </section>
   @endif
 
+  {{-- Hiển thị validation errors (Laravel đặt vào session('errors') khi $request->validate() fail) --}}
+  @if ($errors->any())
+    <section class="account-alerts" aria-live="polite">
+      <div class="account-alert account-alert--danger">
+        <strong>Vui lòng sửa {{ $errors->count() }} lỗi sau trước khi lưu:</strong>
+        <ul style="margin: 8px 0 0 20px; padding: 0;">
+          @foreach ($errors->all() as $error)
+            <li>{{ $error }}</li>
+          @endforeach
+        </ul>
+      </div>
+    </section>
+  @endif
+
   {{-- Bộ lọc tìm kiếm --}}
   <section class="account-card account-filter-section is-open">
     <form class="account-filter" method="GET" action="{{ route('admin.b2b.partners.index') }}">

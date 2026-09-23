@@ -74,7 +74,7 @@ class PartnerManagementController extends Controller
             'so_dien_thoai' => 'required|string|max:20',
             'ho' => 'nullable|string|max:100',
             'ten' => 'nullable|string|max:100',
-            'mat_khau' => 'nullable|string|min:6|confirmed',
+            'password' => 'nullable|string|min:6|confirmed',
             'ngay_ky_hop_dong' => 'nullable|date',
             'so_hop_dong' => 'nullable|string|max:100',
             'email_ky_thuat' => 'required|email|max:255',
@@ -82,7 +82,7 @@ class PartnerManagementController extends Controller
             'ky_doi_soat' => 'required|integer|min:1',
             'folder_ftp' => 'nullable|string|max:255',
             'telegram_group_id' => 'nullable|string|max:100',
-            'trang_thai' => 'required|string|in:hoat_dong,tam_khoa',
+            'trang_thai' => 'required|string|in:hoat_dong,tam_dung,tam_khoa,khoa',
             
             // Tab 2: Cấu hình API
             'client_id' => 'nullable|string|max:100|unique:cau_hinh_api_dai_ly,client_id',
@@ -111,12 +111,12 @@ class PartnerManagementController extends Controller
 
         DB::transaction(function () use ($validated, $generatedSecret, $clientId, &$partner) {
             $userId = null;
-            if (!empty($validated['mat_khau'])) {
+            if (!empty($validated['password'])) {
                 $user = User::create([
                     'name' => $validated['ten_dai_ly_api'],
                     'ten_dang_nhap' => strtolower($validated['ma_dai_ly_api']),
                     'email' => $validated['email_ky_thuat'],
-                    'password' => Hash::make($validated['mat_khau']),
+                    'password' => Hash::make($validated['password']),
                     'trang_thai' => 'active',
                 ]);
                 $userId = $user->id;
@@ -202,7 +202,7 @@ class PartnerManagementController extends Controller
             'ky_doi_soat' => 'required|integer|min:1',
             'folder_ftp' => 'nullable|string|max:255',
             'telegram_group_id' => 'nullable|string|max:100',
-            'trang_thai' => 'required|string|in:hoat_dong,tam_khoa',
+            'trang_thai' => 'required|string|in:hoat_dong,tam_dung,tam_khoa,khoa',
             
             // Tab 2: Cấu hình API
             'danh_sach_ip_ket_noi' => 'nullable|string',

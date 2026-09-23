@@ -75,6 +75,27 @@ class OrderController extends Controller
                 'error_code' => $errorCode,
                 'message' => $msg,
             ], $httpCode);
+        } catch (\Illuminate\Database\QueryException $qe) {
+            // Phân loại lỗi schema để kỹ thuật viên nhận diện nhanh
+            $msg = $qe->getMessage();
+            if ($qe->getCode() === '42S02' || str_contains($msg, "doesn't exist") || str_contains($msg, "Base table or view not found")) {
+                Log::error("B2B Order Schema Missing [Req: {$requestId}]: " . $msg);
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'SCHEMA_OUT_OF_DATE',
+                    'message' => 'Database schema chưa được migrate đầy đủ. Liên hệ admin để chạy: php artisan migrate --force',
+                    'request_id' => $requestId,
+                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+            if ($qe->getCode() === 'HY000' && str_contains($msg, 'Lock wait timeout')) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'DB_LOCK_TIMEOUT',
+                    'message' => 'Hệ thống đang bận xử lý, vui lòng thử lại sau ít giây.',
+                    'request_id' => $requestId,
+                ], Response::HTTP_SERVICE_UNAVAILABLE);
+            }
+            throw $qe;
         } catch (\Throwable $e) {
             $requestId = (string) Str::uuid();
 
