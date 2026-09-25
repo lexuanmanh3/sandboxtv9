@@ -5,24 +5,19 @@
 
     RewriteEngine On
 
-    # Chặn truy cập trực tiếp file nhạy cảm
     RewriteRule ^(\.env|\.git|composer\.(json|lock)|package\.(json|lock)) - [F,L]
     RewriteRule \.(zip|bak|old|sql|tar|gz|7z|rar|key|pem|log|env.*)$ - [F,L]
 
-    # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-    # Chuyển hướng bỏ hoàn toàn chữ public trong URL
     RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\s+([^?\s]*)/public(?:/([^\s?]*))? [NC]
     RewriteRule ^ %1/%2 [R=301,L,NE]
 
-    # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
